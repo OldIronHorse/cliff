@@ -40,7 +40,17 @@ Cliff := {}.{
                             match infos_by_name.get(opt.drop_prefix("--")) {
                                 Ok(i) => {
                                     match i.kind {
-                                        Value => Err(MissingValue(opt))
+                                        Value if raw.opts.contains(i.long) =>
+                                            Err(RepeatedOption(opt))
+                                        Value =>
+                                            match rest {
+                                                [next, .. as rest1] =>
+                                                    do(
+                                                        rest1,
+                                                        { ..raw, opts: raw.opts.insert(
+                                                            i.long, [next]) })
+                                                _ => Err(MissingValue(opt))
+                                            }
                                         _ =>
                                             do(rest, { ..raw, opts: raw.opts.update(i.long, |old_value|
                                                 match old_value {
@@ -180,6 +190,14 @@ expect {
     Dict.from_list([("file", ["f.txt"])])
         == Cliff.tokenise(
             ["--file=f.txt"],
+            [
+                Opt.Spec.value("file").short("f").info,
+            ])?.opts
+}
+expect {
+    Dict.from_list([("file", ["f.txt"])])
+        == Cliff.tokenise(
+            ["--file", "f.txt"],
             [
                 Opt.Spec.value("file").short("f").info,
             ])?.opts
