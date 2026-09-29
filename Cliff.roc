@@ -88,12 +88,11 @@ Cliff := {}.{
                                     match infos_by_name.get(s) {
                                         Err(KeyNotFound) => Err(UnknownOption("-${s}"))
                                         Ok(info) =>
-                                            Ok({ ..r, opts: r.opts.update(info.long, |old_value|
-                                                match old_value {
-                                                    Err(Missing) => Ok([""])
-                                                    Ok(vs) => Ok(vs.append(""))
-                                                })
-                                            })
+                                            match info.kind {
+                                                Value | Values => Err(UnexpectedValue("-${s}"))
+                                                _ => 
+                                                    Ok({ ..r, opts: upsert(r.opts, info.long, "") })
+                                            }
                                     }
                                 _ => Err(UnexpectedValue(opt))
                             })?)
@@ -153,6 +152,16 @@ Cliff := {}.{
     }
 }
 
+upsert : Dict(a, List(b)), a, b -> Dict(a, List(b))
+    where [a.is_eq : a, a -> Bool, a.to_hash : a, Hasher -> Hasher]
+upsert = |d, k, v|
+    d.update(k, |ov|
+        match ov {
+            Ok(vs) => Ok(vs.append(v))
+            Err(Missing) => Ok([v])
+        })
+
+
 dummy : List(Str) -> Try(a, [TypeMismatch, NotFound])
 dummy = |_| Err(NotFound)
 
@@ -182,8 +191,8 @@ expect Dict.from_list([("verbosity", [""]), ("exclusive", [""])])
     == Cliff.tokenise(
         ["--verbosity", "--exclusive"],
         [
-            Opt.Spec.count("verbosity").short("v").info,
-            Opt.Spec.count("exclusive").short("x").info,
+            Opt.Spec.count("verbosity").info,
+            Opt.Spec.flag("exclusive").info,
         ])?.opts
 expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", [""])])
     == Cliff.tokenise(
