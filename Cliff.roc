@@ -8,8 +8,8 @@ Cliff := {}.{
         RepeatedOption(Str),
     ]
 
-    record : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
-    record = |raw, info, maybe_value|
+    add_opt : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
+    add_opt = |raw, info, maybe_value|
         match (info.kind, maybe_value) {
             (Value, Err(NoValue)) | (Values, Err(NoValue)) => Err(MissingValue(info.long))
             (Value, Ok(_)) if raw.opts.contains(info.long) => Err(RepeatedOption(info.long))
@@ -36,7 +36,7 @@ Cliff := {}.{
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
                             match infos_by_name.get(before) {
-                                Ok(i) => do(rest, record(raw, i, Ok(after))?)
+                                Ok(i) => do(rest, add_opt(raw, i, Ok(after))?)
                                 _ => Err(UnknownOption(opt))
                             }
                         }
@@ -47,10 +47,10 @@ Cliff := {}.{
                                         Value | Values => 
                                             match rest {
                                                 [value, .. as rest1] =>
-                                                    do(rest1, record(raw, i, Ok(value))?)
+                                                    do(rest1, add_opt(raw, i, Ok(value))?)
                                                 _ => Err(MissingValue(i.long))
                                             }
-                                        _ => do(rest, record(raw, i, Err(NoValue))?)
+                                        _ => do(rest, add_opt(raw, i, Err(NoValue))?)
                                     }
                                 _ => Err(UnknownOption(opt))
                             }
@@ -64,7 +64,7 @@ Cliff := {}.{
                                 Ok(s) =>
                                     match infos_by_name.get(s) {
                                         Err(KeyNotFound) => Err(UnknownOption(s))
-                                        Ok(info) => record(r,info, Err(NoValue))
+                                        Ok(info) => add_opt(r,info, Err(NoValue))
                                     }
                                 _ => Err(UnexpectedValue(opt))
                             })?)
