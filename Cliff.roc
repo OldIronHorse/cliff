@@ -8,6 +8,17 @@ Cliff := {}.{
         RepeatedOption(Str),
     ]
 
+    record : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
+    record = |raw, info, maybe_value|
+        match (info.kind, maybe_value) {
+            (Value, Err(NoValue)) | (Values, Err(NoValue)) => Err(MissingValue(info.long))
+            (Value, Ok(_)) if raw.opts.contains(info.long) => Err(RepeatedOption(info.long))
+            (Value, Ok(v)) => Ok({ ..raw, opts: raw.opts.insert(info.long, [v]) })
+            (Values, Ok(v)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, v) })
+            (_, Ok(_)) => Err(UnexpectedValue(info.long))
+            (_, Err(NoValue)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, "") })
+        }
+
     tokenise : List(Str), List(Cliff.Opt.Info) -> Try(Raw, TokenError)
     tokenise = |argv, infos| {
         infos_by_name = infos.map(|i| (i.long, i))
@@ -25,44 +36,22 @@ Cliff := {}.{
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
                             match infos_by_name.get(before) {
-                                Ok(i) =>
-                                    match i.kind {
-                                        Value if raw.opts.contains(i.long) =>
-                                            Err(RepeatedOption("--${before}"))
-                                        Value =>
-                                            do(rest, { ..raw, opts: raw.opts.insert(i.long, [after]) })
-                                        Values =>
-                                            do(rest, { ..raw, opts: upsert(raw.opts, i.long, after) })
-                                        _ => Err(UnexpectedValue(opt))
-                                    }
+                                Ok(i) => do(rest, record(raw, i, Ok(after))?)
                                 _ => Err(UnknownOption(opt))
                             }
                         }
                         Err(NotFound) => {
                             match infos_by_name.get(opt.drop_prefix("--")) {
-                                Ok(i) => {
+                                Ok(i) => 
                                     match i.kind {
-                                        Value if raw.opts.contains(i.long) =>
-                                            Err(RepeatedOption(opt))
-                                        Value =>
+                                        Value | Values => 
                                             match rest {
                                                 [value, .. as rest1] =>
-                                                    do(
-                                                        rest1,
-                                                        { ..raw, opts: raw.opts.insert(
-                                                            i.long, [value]) })
-                                                _ => Err(MissingValue(opt))
+                                                    do(rest1, record(raw, i, Ok(value))?)
+                                                _ => Err(MissingValue(i.long))
                                             }
-                                        Values =>
-                                            match rest {
-                                                [value, .. as rest1] =>
-                                                    do(rest1, { ..raw, opts: upsert(raw.opts, i.long, value) })
-                                                _ => Err(MissingValue(opt))
-                                            }
-                                        _ =>
-                                            do(rest, { ..raw, opts: upsert(raw.opts, i.long, "") })
+                                        _ => do(rest, record(raw, i, Err(NoValue))?)
                                     }
-                                }
                                 _ => Err(UnknownOption(opt))
                             }
                         }
@@ -74,13 +63,8 @@ Cliff := {}.{
                             match Str.from_utf8([c]) {
                                 Ok(s) =>
                                     match infos_by_name.get(s) {
-                                        Err(KeyNotFound) => Err(UnknownOption("-${s}"))
-                                        Ok(info) =>
-                                            match info.kind {
-                                                Value | Values => Err(UnexpectedValue("-${s}"))
-                                                _ => 
-                                                    Ok({ ..r, opts: upsert(r.opts, info.long, "") })
-                                            }
+                                        Err(KeyNotFound) => Err(UnknownOption(s))
+                                        Ok(info) => record(r,info, Err(NoValue))
                                     }
                                 _ => Err(UnexpectedValue(opt))
                             })?)
@@ -149,7 +133,6 @@ upsert = |d, k, v|
             Err(Missing) => Ok([v])
         })
 
-
 dummy : List(Str) -> Try(a, [TypeMismatch, NotFound])
 dummy = |_| Err(NotFound)
 
@@ -197,10 +180,10 @@ expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", ["", ""])])
             Opt.Spec.count("exclusive").short("x").info,
         ])?.opts
 expect {
-    Err(UnexpectedValue("--verbosity=3"))
+    Err(UnexpectedValue("verbosity"))
         == Cliff.tokenise(["--verbosity=3"], [Opt.Spec.count("verbosity").info])
 }
-expect Err(UnknownOption("-x"))
+expect Err(UnknownOption("x"))
     == Cliff.tokenise(["-x"], [Opt.Spec.count("verbosity").short("v").info])
 expect {
     Err(UnknownOption("--excl"))
