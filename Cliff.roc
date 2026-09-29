@@ -31,6 +31,12 @@ Cliff := {}.{
                                             Err(RepeatedOption("--${before}"))
                                         Value =>
                                             do(rest, { ..raw, opts: raw.opts.insert(i.long, [after]) })
+                                        Values =>
+                                            do(rest, { ..raw, opts: raw.opts.update(i.long, |old_value|
+                                                match old_value {
+                                                    Err(Missing) => Ok([after])
+                                                    Ok(vs) => Ok(vs.append(after))
+                                                }) })
                                         _ => Err(UnexpectedValue(opt))
                                     }
                                 _ => Err(UnknownOption(opt))
@@ -44,11 +50,21 @@ Cliff := {}.{
                                             Err(RepeatedOption(opt))
                                         Value =>
                                             match rest {
-                                                [next, .. as rest1] =>
+                                                [value, .. as rest1] =>
                                                     do(
                                                         rest1,
                                                         { ..raw, opts: raw.opts.insert(
-                                                            i.long, [next]) })
+                                                            i.long, [value]) })
+                                                _ => Err(MissingValue(opt))
+                                            }
+                                        Values =>
+                                            match rest {
+                                                [value, .. as rest1] =>
+                                                    do(rest1, { ..raw, opts: raw.opts.update(i.long, |old_value|
+                                                        match old_value {
+                                                            Err(Missing) => Ok([value])
+                                                            Ok(vs) => Ok(vs.append(value))
+                                                        }) })
                                                 _ => Err(MissingValue(opt))
                                             }
                                         _ =>
@@ -105,6 +121,9 @@ Cliff := {}.{
 
             value : Str -> Spec(Str)
             value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: dummy }
+
+            values : Str -> Spec(Str)
+            values = |long| Spec.{ info: Info.{ kind: Values, long }, convert: dummy }
 
             short : Spec(a), Str -> Spec(a)
             short = |spec, s| { ..spec, info: { ..spec.info, short: s } }
@@ -207,12 +226,12 @@ expect {
             ])?.opts
 }
 expect {
-    Err(RepeatedOption("--file"))
+    Dict.from_list([("file", ["f.txt", "g.txt"])])
         == Cliff.tokenise(
-            ["--file=f.txt", "--file=g.txt"],
+            ["--file", "f.txt", "--file=g.txt"],
             [
-                Opt.Spec.value("file").short("f").info,
-            ])
+                Opt.Spec.values("file").info,
+            ])?.opts
 }
 expect {
     Dict.from_list([("offset", ["-5"])])
