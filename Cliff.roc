@@ -24,7 +24,6 @@ Cliff := {}.{
                 [opt, .. as rest] if opt.starts_with("--") =>
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
-                            dbg (before, after)
                             match infos_by_name.get(before) {
                                 Ok(i) =>
                                     match i.kind {
@@ -37,10 +36,8 @@ Cliff := {}.{
                             }
                         }
                         Err(NotFound) => {
-                            dbg opt
                             match infos_by_name.get(opt.drop_prefix("--")) {
                                 Ok(i) => {
-                                    dbg i
                                     match i.kind {
                                         Value => Err(MissingValue(opt))
                                         _ =>
@@ -56,7 +53,7 @@ Cliff := {}.{
                         }
                     }
                 [opt, .. as rest] if opt.starts_with("-") =>
-                    opt.drop_prefix("-")
+                    do(rest, opt.drop_prefix("-")
                         .to_utf8()
                         .fold_try(raw, |r, c|
                             match Str.from_utf8([c]) {
@@ -64,14 +61,15 @@ Cliff := {}.{
                                     match infos_by_name.get(s) {
                                         Err(KeyNotFound) => Err(UnknownOption("-${s}"))
                                         Ok(info) =>
-                                            do(rest, { ..r, opts: r.opts.update(info.long, |old_value|
+                                            Ok({ ..r, opts: r.opts.update(info.long, |old_value|
                                                 match old_value {
                                                     Err(Missing) => Ok([""])
                                                     Ok(vs) => Ok(vs.append(""))
-                                                }) })
+                                                })
+                                            })
                                     }
                                 _ => Err(UnexpectedValue(opt))
-                            })
+                            })?)
                 [opt, ..] => Err(UnknownOption(opt))
             }
 
@@ -164,7 +162,7 @@ expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", [""])])
             Opt.Spec.count("verbosity").short("v").info,
             Opt.Spec.count("exclusive").short("x").info,
         ])?.opts
-expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", ["," ""])])
+expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", ["", ""])])
     == Cliff.tokenise(
         ["-vxv", "-x"],
         [
@@ -178,11 +176,6 @@ expect {
         == Cliff.tokenise(["--excl"], [Opt.Spec.count("verbosity").short("v").info])
 }
 expect {
-    dbg Cliff.tokenise(
-        ["--file=f.txt"],
-        [
-            Opt.Spec.value("file").short("f").info,
-        ])
     Dict.from_list([("file", ["f.txt"])])
         == Cliff.tokenise(
             ["--file=f.txt"],
