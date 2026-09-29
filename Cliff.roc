@@ -22,11 +22,39 @@ Cliff := {}.{
             match args {
                 [] => Ok(raw)
                 [opt, .. as rest] if opt.starts_with("--") =>
-                    do(rest, { ..raw, opts: raw.opts.update(opt.drop_prefix("--"), |old_value|
-                        match old_value {
-                            Err(Missing) => Ok([""])
-                            Ok(vs) => Ok(vs.append(""))
-                        }) })
+                    match opt.drop_prefix("--").split_first("=") {
+                        Ok({ before, after }) => {
+                            dbg (before, after)
+                            match infos_by_name.get(before) {
+                                Ok(i) =>
+                                    match i.kind {
+                                        Value =>
+                                            do(rest, { ..raw, opts: raw.opts.insert(i.long, [after]) })
+                                        _ =>
+                                            Err(UnexpectedValue(after))
+                                    }
+                                _ => Err(UnknownOption(opt))
+                            }
+                        }
+                        Err(NotFound) => {
+                            dbg opt
+                            match infos_by_name.get(opt.drop_prefix("--")) {
+                                Ok(i) => {
+                                    dbg i
+                                    match i.kind {
+                                        Value => Err(MissingValue(opt))
+                                        _ =>
+                                            do(rest, { ..raw, opts: raw.opts.update(i.long, |old_value|
+                                                match old_value {
+                                                    Err(Missing) => Ok([""])
+                                                    Ok(vs) => Ok(vs.append(""))
+                                                }) })
+                                    }
+                                }
+                                _ => Err(UnknownOption(opt))
+                            }
+                        }
+                    }
                 [opt, .. as rest] if opt.starts_with("-") =>
                     opt.drop_prefix("-")
                         .to_utf8()
@@ -65,6 +93,9 @@ Cliff := {}.{
 
             flag : Str -> Spec(Bool)
             flag = |long| Spec.{ info: Info.{ kind: Flag, long }, convert: dummy }
+
+            value : Str -> Spec(Str)
+            value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: dummy }
 
             short : Spec(a), Str -> Spec(a)
             short = |spec, s| { ..spec, info: { ..spec.info, short: s } }
@@ -135,3 +166,20 @@ expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", [""])])
         ])?.opts
 expect Err(UnknownOption("-x"))
     == Cliff.tokenise(["-x"], [Opt.Spec.count("verbosity").short("v").info])
+expect {
+    Err(UnknownOption("--excl"))
+        == Cliff.tokenise(["--excl"], [Opt.Spec.count("verbosity").short("v").info])
+}
+expect {
+    dbg Cliff.tokenise(
+        ["--file=f.txt"],
+        [
+            Opt.Spec.value("file").short("f").info,
+        ])
+    Dict.from_list([("file", ["f.txt"])])
+        == Cliff.tokenise(
+            ["--file=f.txt"],
+            [
+                Opt.Spec.value("file").short("f").info,
+            ])?.opts
+}
