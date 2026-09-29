@@ -19,6 +19,13 @@ Cliff := {}.{
             (_, Err(NoValue)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, "") })
         }
 
+    get_opt_info : Dict(Str, Cliff.Opt.Info), Str -> Try(Cliff.Opt.Info, _)
+    get_opt_info = |infos, name|
+        match infos.get(name) {
+            Ok(info) => Ok(info)
+            _ => Err(UnknownOption(name))
+        }
+
     tokenise : List(Str), List(Cliff.Opt.Info) -> Try(Raw, TokenError)
     tokenise = |argv, infos| {
         infos_by_name = infos.map(|i| (i.long, i))
@@ -35,24 +42,17 @@ Cliff := {}.{
                 [opt, .. as rest] if opt.starts_with("--") =>
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
-                            match infos_by_name.get(before) {
-                                Ok(i) => do(rest, add_opt(raw, i, Ok(after))?)
-                                _ => Err(UnknownOption(opt))
-                            }
+                            do(rest, add_opt(raw, get_opt_info(infos_by_name, before)?, Ok(after))?)
                         }
                         Err(NotFound) => {
-                            match infos_by_name.get(opt.drop_prefix("--")) {
-                                Ok(i) => 
-                                    match i.kind {
-                                        Value | Values => 
-                                            match rest {
-                                                [value, .. as rest1] =>
-                                                    do(rest1, add_opt(raw, i, Ok(value))?)
-                                                _ => Err(MissingValue(i.long))
-                                            }
-                                        _ => do(rest, add_opt(raw, i, Err(NoValue))?)
+                            match get_opt_info(infos_by_name, opt.drop_prefix("--"))? {
+                                i if i.kind == Value or i.kind == Values =>
+                                    match rest {
+                                        [value, .. as rest1] =>
+                                            do(rest1, add_opt(raw, i, Ok(value))?)
+                                        _ => Err(MissingValue(i.long))
                                     }
-                                _ => Err(UnknownOption(opt))
+                                i => do(rest, add_opt(raw, i, Err(NoValue))?)
                             }
                         }
                     }
@@ -62,10 +62,7 @@ Cliff := {}.{
                         .fold_try(raw, |r, c|
                             match Str.from_utf8([c]) {
                                 Ok(s) =>
-                                    match infos_by_name.get(s) {
-                                        Err(KeyNotFound) => Err(UnknownOption(s))
-                                        Ok(info) => add_opt(r,info, Err(NoValue))
-                                    }
+                                    add_opt(r, get_opt_info(infos_by_name, s)?, Err(NoValue))
                                 _ => Err(UnexpectedValue(opt))
                             })?)
                 [opt, ..] => Err(UnknownOption(opt))
@@ -186,7 +183,7 @@ expect {
 expect Err(UnknownOption("x"))
     == Cliff.tokenise(["-x"], [Opt.Spec.count("verbosity").short("v").info])
 expect {
-    Err(UnknownOption("--excl"))
+    Err(UnknownOption("excl"))
         == Cliff.tokenise(["--excl"], [Opt.Spec.count("verbosity").short("v").info])
 }
 expect {
