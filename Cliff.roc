@@ -214,3 +214,11 @@ expect {
                 Opt.Spec.value("file").short("f").info,
             ])
 }
+expect {
+    Dict.from_list([("offset", ["-5"])])
+        == Cliff.tokenise(
+            ["--offset", "-5"],
+            [
+                Opt.Spec.value("offset").info,
+            ])?.opts
+}
