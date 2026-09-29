@@ -31,7 +31,7 @@ Cliff := {}.{
                                             Err(RepeatedOption("--${before}"))
                                         Value =>
                                             do(rest, { ..raw, opts: raw.opts.insert(i.long, [after]) })
-                                        _ => Err(UnexpectedValue(after))
+                                        _ => Err(UnexpectedValue(opt))
                                     }
                                 _ => Err(UnknownOption(opt))
                             }
@@ -180,8 +180,10 @@ expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", ["", ""])])
             Opt.Spec.count("verbosity").short("v").info,
             Opt.Spec.count("exclusive").short("x").info,
         ])?.opts
-expect Err(UnexpectedValue("--verbosity"))
-    == Cliff.tokenise(["--verbosity=3"], [Opt.Spec.count("verbosity").info])
+expect {
+    Err(UnexpectedValue("--verbosity=3"))
+        == Cliff.tokenise(["--verbosity=3"], [Opt.Spec.count("verbosity").info])
+}
 expect Err(UnknownOption("-x"))
     == Cliff.tokenise(["-x"], [Opt.Spec.count("verbosity").short("v").info])
 expect {
