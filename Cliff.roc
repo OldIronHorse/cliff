@@ -119,6 +119,13 @@ expect Dict.from_list([("verbosity", [""]), ("exclusive", [""])])
             Opt.Spec.count("verbosity").short("v").info,
             Opt.Spec.count("exclusive").short("x").info,
         ])?.opts
+expect Dict.from_list([("verbosity", [""]), ("exclusive", [""])])
+    == Cliff.tokenise(
+        ["--verbosity", "-exclusive"],
+        [
+            Opt.Spec.count("verbosity").short("v").info,
+            Opt.Spec.count("exclusive").short("x").info,
+        ])?.opts
 expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", [""])])
     == Cliff.tokenise(
         ["-vxv"],
