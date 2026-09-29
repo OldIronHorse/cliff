@@ -68,11 +68,7 @@ Cliff := {}.{
                                                 _ => Err(MissingValue(opt))
                                             }
                                         _ =>
-                                            do(rest, { ..raw, opts: raw.opts.update(i.long, |old_value|
-                                                match old_value {
-                                                    Err(Missing) => Ok([""])
-                                                    Ok(vs) => Ok(vs.append(""))
-                                                }) })
+                                            do(rest, { ..raw, opts: upsert(raw.opts, i.long, "") })
                                     }
                                 }
                                 _ => Err(UnknownOption(opt))
