@@ -27,10 +27,11 @@ Cliff := {}.{
                             match infos_by_name.get(before) {
                                 Ok(i) =>
                                     match i.kind {
+                                        Value if raw.opts.contains(i.long) =>
+                                            Err(RepeatedOption("--${before}"))
                                         Value =>
                                             do(rest, { ..raw, opts: raw.opts.insert(i.long, [after]) })
-                                        _ =>
-                                            Err(UnexpectedValue(after))
+                                        _ => Err(UnexpectedValue(after))
                                     }
                                 _ => Err(UnknownOption(opt))
                             }
@@ -182,4 +183,12 @@ expect {
             [
                 Opt.Spec.value("file").short("f").info,
             ])?.opts
+}
+expect {
+    Err(RepeatedOption("--file"))
+        == Cliff.tokenise(
+            ["--file=f.txt", "--file=g.txt"],
+            [
+                Opt.Spec.value("file").short("f").info,
+            ])
 }
