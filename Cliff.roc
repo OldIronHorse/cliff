@@ -32,11 +32,7 @@ Cliff := {}.{
                                         Value =>
                                             do(rest, { ..raw, opts: raw.opts.insert(i.long, [after]) })
                                         Values =>
-                                            do(rest, { ..raw, opts: raw.opts.update(i.long, |old_value|
-                                                match old_value {
-                                                    Err(Missing) => Ok([after])
-                                                    Ok(vs) => Ok(vs.append(after))
-                                                }) })
+                                            do(rest, { ..raw, opts: upsert(raw.opts, i.long, after) })
                                         _ => Err(UnexpectedValue(opt))
                                     }
                                 _ => Err(UnknownOption(opt))
@@ -60,11 +56,7 @@ Cliff := {}.{
                                         Values =>
                                             match rest {
                                                 [value, .. as rest1] =>
-                                                    do(rest1, { ..raw, opts: raw.opts.update(i.long, |old_value|
-                                                        match old_value {
-                                                            Err(Missing) => Ok([value])
-                                                            Ok(vs) => Ok(vs.append(value))
-                                                        }) })
+                                                    do(rest1, { ..raw, opts: upsert(raw.opts, i.long, value) })
                                                 _ => Err(MissingValue(opt))
                                             }
                                         _ =>
