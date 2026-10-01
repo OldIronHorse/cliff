@@ -89,12 +89,10 @@ Cliff := {}.{
                             })?)
                 [param, .. as rest] =>
                     match p_infos {
-                        [pi, .. as rpi] if pi.kind == Values =>
-                            match rpi.keep_if(|i| i.mandatory) {
-                                [] => do(rest, rpi.prepend({ ..pi, mandatory: Bool.False }), add_param(raw, pi, param))
-                                _ => Err(VariadicParamNotLast(pi.name))
-                            }
-                        [pi, .. as rpi] => do(rest, rpi, add_param(raw, pi, param))
+                        [pi] if pi.kind == Values =>
+                            do(rest, [{ ..pi, mandatory: Bool.False }], add_param(raw, pi, param))
+                        [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param))
+                        [pi, ..] => Err(VariadicParamNotLast(pi.name))
                         [] => Err(TrailingParameters(args))
                     }
             }
@@ -112,17 +110,17 @@ Cliff := {}.{
                     and self.help == other.help
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
-            count : Str -> Spec(I64)
-            count = |long| Spec.{ info: Info.{ kind: Count, long }, convert: dummy }
+            count : Str -> Spec(U64)
+            count = |long| Spec.{ info: Info.{ kind: Count, long }, convert: convert_count }
 
             flag : Str -> Spec(Bool)
-            flag = |long| Spec.{ info: Info.{ kind: Flag, long }, convert: dummy }
+            flag = |long| Spec.{ info: Info.{ kind: Flag, long }, convert: convert_flag }
 
             value : Str -> Spec(Str)
-            value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: dummy }
+            value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: convert_value }
 
-            values : Str -> Spec(Str)
-            values = |long| Spec.{ info: Info.{ kind: Values, long }, convert: dummy }
+            values : Str -> Spec(List(Str))
+            values = |long| Spec.{ info: Info.{ kind: Values, long }, convert: convert_values}
 
             short : Spec(a), Str -> Spec(a)
             short = |spec, s| { ..spec, info: { ..spec.info, short: s } }
@@ -167,6 +165,71 @@ upsert = |d, k, v|
 
 dummy : List(Str) -> Try(a, [TypeMismatch, NotFound])
 dummy = |_| Err(NotFound)
+
+convert_flag: List(Str) -> Try(Bool, [TypeMismatch, NotFound])
+convert_flag = |vs|
+    match vs {
+        [] => Ok(Bool.False)
+        _ => Ok(Bool.True)
+    }
+
+convert_value: List(Str) -> Try(Str, [TypeMismatch, NotFound])
+convert_value = |vs|
+    match vs {
+        [] => Err(NotFound)
+        [v, ..] => Ok(v)
+    }
+
+convert_values: List(Str) -> Try(List(Str), [TypeMismatch, NotFound])
+convert_values = |vs| Ok(vs)
+
+convert_count: List(Str) -> Try(U64, [TypeMismatch, NotFound])
+convert_count = |vs| Ok(vs.len())
+
+expect Bool.True == convert_flag([""])?
+expect Bool.False == convert_flag([])?
+
+expect Err(NotFound) == convert_value([])
+expect "a" == convert_value(["a"])?
+
+expect 0 == convert_count([])?
+expect 1 == convert_count([""])?
+expect 5 == convert_count(["", "", "", "", ""])?
+
+expect [] == convert_values([])?
+expect ["one"]== convert_values(["one"])?
+expect ["one", "2", "three", "4", "five"] == convert_values(["one", "2", "three", "4", "five"])?
+
+expect {
+    expr_spec = Opt.Spec.values("expr").short("x")
+    ["one", "two", "3"] == (expr_spec.convert)(Cliff.tokenise(
+        ["--expr", "one", "--expr=two", "--expr", "3"], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+}
+expect {
+    expr_spec = Opt.Spec.count("expr").short("x")
+    0 == (expr_spec.convert)(Cliff.tokenise([], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+}
+expect {
+    expr_spec = Opt.Spec.count("expr").short("x")
+    5 == (expr_spec.convert)(Cliff.tokenise(["-xxxxx"], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+}
+expect {
+    expr_spec = Opt.Spec.value("expr").short("x")
+    Err(NotFound) == (expr_spec.convert)(Cliff.tokenise([], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))
+}
+expect {
+    expr_spec = Opt.Spec.value("expr")
+    "some expression"
+        == (expr_spec.convert)(Cliff.tokenise(["--expr", "some expression"], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+}
+expect {
+    quiet_spec = Opt.Spec.flag("quiet").short("q")
+    (quiet_spec.convert)(Cliff.tokenise([], [quiet_spec.info], [])?.opts.get(quiet_spec.info.long).ok_or([]))?.not()
+}
+expect {
+    quiet_spec = Opt.Spec.flag("quiet").short("q")
+    (quiet_spec.convert)(Cliff.tokenise(["-q"], [quiet_spec.info], [])?.opts.get(quiet_spec.info.long).ok_or([]))?
+}
 
 expect
     Cliff.Opt.Info.{ kind: Count, short: "v", long: "verbosity", help: "verbosity level" }
