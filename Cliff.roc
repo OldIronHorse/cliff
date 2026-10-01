@@ -7,6 +7,7 @@ Cliff := {}.{
         UnexpectedValue(Str),
         RepeatedOption(Str),
         TrailingParameters(List(Str)),
+        VariadicParamNotLast(Str),
     ]
 
     add_opt : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
@@ -76,8 +77,9 @@ Cliff := {}.{
                 [param, .. as rest] =>
                     match p_infos {
                         [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param))
-                        [pi, ..] if pi.kind == Values => do(rest, p_infos, add_param(raw, pi, param))
-                        _ => Err(TrailingParameters(args))
+                        [pi] if pi.kind == Values => do(rest, p_infos, add_param(raw, pi, param))
+                        [] => Err(TrailingParameters(args))
+                        _ => Err(VariadicParamNotLast(param))
                     }
             }
 
@@ -259,3 +261,13 @@ expect {
             Param.Spec.value("expr").info,
             Param.Spec.values("files").info,
         ])?
+expect Err(VariadicParamNotLast("files") 
+        opts: Dict.from_list([("invert", [""])]) == Cliff.tokenise(
+            ["-v", "error", "f.txt", "g.txt"],
+            [
+                Opt.Spec.flag("invert").short("v").info,
+            ],
+            [
+                Param.Spec.values("files").info,
+                Param.Spec.value("expr").info,
+            ])
