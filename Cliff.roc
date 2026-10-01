@@ -117,10 +117,11 @@ Cliff := {}.{
     }
     Param := {}.{
         Kind : [Value, Values]
-        Info := { kind: Kind, name: Str, help: Str ?? "" }.{
+        Info := { kind: Kind, name: Str, mandatory: Bool ??, Bool.True,  help: Str ?? "" }.{
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.name == other.name
+                    and self.mandatory == other.mandatory
                     and self.help == other.help
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound])}.{
@@ -129,6 +130,9 @@ Cliff := {}.{
 
             values : Str -> Spec(List(Str))
             values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: dummy}
+
+            optional : Spec -> Spec
+            optional = |s| { ..spec, info: { ..spec.info, mandatory: Bool.False }}
 
             help : Spec, Str -> Spec
             help = |spec, s| { ..spec, info: { ..spec.info, help: s }}
@@ -262,13 +266,37 @@ expect {
             Param.Spec.values("files").info,
         ])?
 expect {
-    Err(VariadicParamNotLast("files")) == Cliff.tokenise(
+        params: Dict.from_list([("files", ["f.txt", "g.txt"]), ("expr", ["error"])]),
+        opts: Dict.from_list([("invert", [""])])
+    } == Cliff.tokenise(
         ["-v", "error", "f.txt", "g.txt"],
         [
             Opt.Spec.flag("invert").short("v").info,
         ],
         [
-            Param.Spec.values("files").info,
             Param.Spec.value("expr").info,
+            Param.Spec.values("files").optional().info,
+        ])?
+expect {
+    Err(MissingArguments(["files"])) == Cliff.tokenise(
+        ["-v", "error"],
+        [
+            Opt.Spec.flag("invert").short("v").info,
+        ],
+        [
+            Param.Spec.value("expr").info,
+            Param.Spec.values("files").info,
         ])
 }
+expect {
+        params: Dict.from_list([("expr", ["error"])]),
+        opts: Dict.from_list([("invert", [""])])
+    } == Cliff.tokenise(
+        ["-v", "error"],
+        [
+            Opt.Spec.flag("invert").short("v").info,
+        ],
+        [
+            Param.Spec.value("expr").info,
+            Param.Spec.values("files").optional().info,
+        ])?
