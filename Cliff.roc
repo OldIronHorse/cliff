@@ -1,11 +1,12 @@
 Cliff := {}.{
-    Raw : { opts: Dict(Str, List(Str)), params: List(Str) }
+    Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
 
     TokenError : [
         UnknownOption(Str),
         MissingValue(Str),
         UnexpectedValue(Str),
         RepeatedOption(Str),
+        TrailingParameters(List(Str)),
     ]
 
     add_opt : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
@@ -19,6 +20,13 @@ Cliff := {}.{
             (_, Err(NoValue)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, "") })
         }
 
+    add_param : Raw, Cliff.Param.Info, Str -> Raw
+    add_param = |raw, info, value|
+        match info.kind {
+            Value => { ..raw, params: raw.params.insert(info.name, [value]) }
+            Values => { ..raw, params: upsert(raw.params, info.name, value) }
+        }
+
     get_opt_info : Dict(Str, Cliff.Opt.Info), Str -> Try(Cliff.Opt.Info, _)
     get_opt_info = |infos, name|
         match infos.get(name) {
@@ -26,49 +34,54 @@ Cliff := {}.{
             _ => Err(UnknownOption(name))
         }
 
-    tokenise : List(Str), List(Cliff.Opt.Info) -> Try(Raw, TokenError)
-    tokenise = |argv, infos| {
-        infos_by_name = infos.map(|i| (i.long, i))
-            .concat(infos.drop_if(|i| i.short.is_empty()).map(|i| (i.short, i)))
+    tokenise : List(Str), List(Cliff.Opt.Info), List(Cliff.Param.Info) -> Try(Raw, TokenError)
+    tokenise = |argv, opt_infos, param_infos| {
+        opt_infos_by_name = opt_infos.map(|i| (i.long, i))
+            .concat(opt_infos.drop_if(|i| i.short.is_empty()).map(|i| (i.short, i)))
             .fold_try(Dict.empty(), |d, (k, v)|
                 if d.contains(k)
                     Err(RepeatedOption(k))
                 else
                     Ok(d.insert(k, v)))?
 
-        do = |args, raw|
+        do = |args, p_infos, raw|
             match args {
                 [] => Ok(raw)
                 [opt, .. as rest] if opt.starts_with("--") =>
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
-                            do(rest, add_opt(raw, get_opt_info(infos_by_name, before)?, Ok(after))?)
+                            do(rest, p_infos, add_opt(raw, get_opt_info(opt_infos_by_name, before)?, Ok(after))?)
                         }
                         Err(NotFound) => {
-                            match get_opt_info(infos_by_name, opt.drop_prefix("--"))? {
+                            match get_opt_info(opt_infos_by_name, opt.drop_prefix("--"))? {
                                 i if i.kind == Value or i.kind == Values =>
                                     match rest {
                                         [value, .. as rest1] =>
-                                            do(rest1, add_opt(raw, i, Ok(value))?)
+                                            do(rest1, p_infos, add_opt(raw, i, Ok(value))?)
                                         _ => Err(MissingValue(i.long))
                                     }
-                                i => do(rest, add_opt(raw, i, Err(NoValue))?)
+                                i => do(rest, p_infos, add_opt(raw, i, Err(NoValue))?)
                             }
                         }
                     }
                 [opt, .. as rest] if opt.starts_with("-") =>
-                    do(rest, opt.drop_prefix("-")
+                    do(rest, p_infos, opt.drop_prefix("-")
                         .to_utf8()
                         .fold_try(raw, |r, c|
                             match Str.from_utf8([c]) {
                                 Ok(s) =>
-                                    add_opt(r, get_opt_info(infos_by_name, s)?, Err(NoValue))
+                                    add_opt(r, get_opt_info(opt_infos_by_name, s)?, Err(NoValue))
                                 _ => Err(UnexpectedValue(opt))
                             })?)
-                [opt, ..] => Err(UnknownOption(opt))
+                [param, .. as rest] =>
+                    match p_infos {
+                        [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param))
+                        [pi, ..] if pi.kind == Values => do(rest, p_infos, add_param(raw, pi, param))
+                        _ => Err(TrailingParameters(args))
+                    }
             }
 
-        do(argv, { opts: Dict.empty(), params: [] })
+        do(argv, param_infos, { opts: Dict.empty(), params: Dict.empty() })
     }
 
     Opt := {}.{
@@ -109,11 +122,11 @@ Cliff := {}.{
                     and self.help == other.help
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound])}.{
-            str : Str -> Spec(Str)
-            str = |name| Spec.{ info: Info.{ name, kind: Value }, convert: dummy }
+            value : Str -> Spec(Str)
+            value = |name| Spec.{ info: Info.{ name, kind: Value }, convert: dummy }
 
-            strs : Str -> Spec(List(Str))
-            strs = |name| Spec.{ info: Info.{ name, kind: Values }, convert: dummy}
+            values : Str -> Spec(List(Str))
+            values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: dummy}
 
             help : Spec, Str -> Spec
             help = |spec, s| { ..spec, info: { ..spec.info, help: s }}
@@ -138,53 +151,57 @@ expect
         == Opt.Spec.count("verbosity").short("v").help("verbosity level").info
 expect
     Cliff.Param.Info.{ kind: Value, name: "file", help: "the file to load" }
-        == Param.Spec.str("file").help("the file to load").info
+        == Param.Spec.value("file").help("the file to load").info
 
 expect Dict.from_list([("verbosity", [""])])
-    == Cliff.tokenise(["--verbosity"], [Opt.Spec.count("verbosity").short("v").info])?.opts
+    == Cliff.tokenise(["--verbosity"], [Opt.Spec.count("verbosity").short("v").info], [])?.opts
 expect Dict.from_list([("verbosity", [""])])
-    == Cliff.tokenise(["-v"], [Opt.Spec.count("verbosity").short("v").info])?.opts
+    == Cliff.tokenise(["-v"], [Opt.Spec.count("verbosity").short("v").info], [])?.opts
 expect Dict.from_list([("verbosity", ["", ""])])
-    == Cliff.tokenise(["-v", "-v"], [Opt.Spec.count("verbosity").short("v").info])?.opts
+    == Cliff.tokenise(["-v", "-v"], [Opt.Spec.count("verbosity").short("v").info], [])?.opts
 expect Dict.from_list([("verbosity", ["", "", ""])])
-    == Cliff.tokenise(["-vvv"], [Opt.Spec.count("verbosity").short("v").info])?.opts
+    == Cliff.tokenise(["-vvv"], [Opt.Spec.count("verbosity").short("v").info], [])?.opts
 expect Dict.from_list([("verbosity", [""]), ("exclusive", [""])])
     == Cliff.tokenise(
         ["-v", "-x"],
         [
             Opt.Spec.count("verbosity").short("v").info,
             Opt.Spec.count("exclusive").short("x").info,
-        ])?.opts
+        ],
+        [])?.opts
 expect Dict.from_list([("verbosity", [""]), ("exclusive", [""])])
     == Cliff.tokenise(
         ["--verbosity", "--exclusive"],
         [
             Opt.Spec.count("verbosity").info,
             Opt.Spec.flag("exclusive").info,
-        ])?.opts
+        ],
+        [])?.opts
 expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", [""])])
     == Cliff.tokenise(
         ["-vxv"],
         [
             Opt.Spec.count("verbosity").short("v").info,
             Opt.Spec.count("exclusive").short("x").info,
-        ])?.opts
+        ],
+        [])?.opts
 expect Dict.from_list([("verbosity", ["", ""]), ("exclusive", ["", ""])])
     == Cliff.tokenise(
         ["-vxv", "-x"],
         [
             Opt.Spec.count("verbosity").short("v").info,
             Opt.Spec.count("exclusive").short("x").info,
-        ])?.opts
+        ],
+        [])?.opts
 expect {
     Err(UnexpectedValue("verbosity"))
-        == Cliff.tokenise(["--verbosity=3"], [Opt.Spec.count("verbosity").info])
+        == Cliff.tokenise(["--verbosity=3"], [Opt.Spec.count("verbosity").info], [])
 }
 expect Err(UnknownOption("x"))
-    == Cliff.tokenise(["-x"], [Opt.Spec.count("verbosity").short("v").info])
+    == Cliff.tokenise(["-x"], [Opt.Spec.count("verbosity").short("v").info], [])
 expect {
     Err(UnknownOption("excl"))
-        == Cliff.tokenise(["--excl"], [Opt.Spec.count("verbosity").short("v").info])
+        == Cliff.tokenise(["--excl"], [Opt.Spec.count("verbosity").short("v").info], [])
 }
 expect {
     Dict.from_list([("file", ["f.txt"])])
@@ -192,7 +209,8 @@ expect {
             ["--file=f.txt"],
             [
                 Opt.Spec.value("file").short("f").info,
-            ])?.opts
+            ],
+            [])?.opts
 }
 expect {
     Dict.from_list([("file", ["f.txt"])])
@@ -200,7 +218,8 @@ expect {
             ["--file", "f.txt"],
             [
                 Opt.Spec.value("file").short("f").info,
-            ])?.opts
+            ],
+            [])?.opts
 }
 expect {
     Dict.from_list([("file", ["f.txt", "g.txt"])])
@@ -208,7 +227,8 @@ expect {
             ["--file", "f.txt", "--file=g.txt"],
             [
                 Opt.Spec.values("file").info,
-            ])?.opts
+            ],
+            [])?.opts
 }
 expect {
     Dict.from_list([("offset", ["-5"])])
@@ -216,5 +236,26 @@ expect {
             ["--offset", "-5"],
             [
                 Opt.Spec.value("offset").info,
-            ])?.opts
+            ],
+            [])?.opts
 }
+
+expect Dict.from_list([("file", ["f.txt"])])
+    == Cliff.tokenise(
+        ["f.txt"],
+        [],
+        [
+            Param.Spec.value("file").info,
+        ])?.params
+expect {
+        params: Dict.from_list([("files", ["f.txt", "g.txt"]), ("expr", ["error"])]),
+        opts: Dict.from_list([("invert", [""])])
+    } == Cliff.tokenise(
+        ["-v", "error", "f.txt", "g.txt"],
+        [
+            Opt.Spec.flag("invert").short("v").info,
+        ],
+        [
+            Param.Spec.value("expr").info,
+            Param.Spec.values("files").info,
+        ])?
