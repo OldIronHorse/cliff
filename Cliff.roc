@@ -8,6 +8,8 @@ Cliff := {}.{
         RepeatedOption(Str),
         TrailingParameters(List(Str)),
         VariadicParamNotLast(Str),
+        MissingArguments(List(Str)),
+        MandatoryParamAfterOptional(Str),
     ]
 
     add_opt : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
@@ -37,6 +39,13 @@ Cliff := {}.{
 
     tokenise : List(Str), List(Cliff.Opt.Info), List(Cliff.Param.Info) -> Try(Raw, TokenError)
     tokenise = |argv, opt_infos, param_infos| {
+        _ = param_infos.fold_try(Bool.False, |seen_optional, p|
+            if p.mandatory and seen_optional
+                Err(MandatoryParamAfterOptional(p.name))
+            else
+                Ok(p.mandatory.not())
+        )?
+
         opt_infos_by_name = opt_infos.map(|i| (i.long, i))
             .concat(opt_infos.drop_if(|i| i.short.is_empty()).map(|i| (i.short, i)))
             .fold_try(Dict.empty(), |d, (k, v)|
@@ -47,7 +56,11 @@ Cliff := {}.{
 
         do = |args, p_infos, raw|
             match args {
-                [] => Ok(raw)
+                [] =>
+                    match p_infos.keep_if(|i| i.mandatory) {
+                        [] => Ok(raw)
+                        remaining => Err(MissingArguments(remaining.map(|p| p.name)))
+                    }
                 [opt, .. as rest] if opt.starts_with("--") =>
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
@@ -76,9 +89,12 @@ Cliff := {}.{
                             })?)
                 [param, .. as rest] =>
                     match p_infos {
-                        [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param))
-                        [pi] if pi.kind == Values => do(rest, p_infos, add_param(raw, pi, param))
-                        [pi, ..] => Err(VariadicParamNotLast(pi.name))
+                        [pi, .. as rpi] if pi.kind == Values =>
+                            match rpi.keep_if(|i| i.mandatory) {
+                                [] => do(rest, rpi.prepend({ ..pi, mandatory: Bool.False }), add_param(raw, pi, param))
+                                _ => Err(VariadicParamNotLast(pi.name))
+                            }
+                        [pi, .. as rpi] => do(rest, rpi, add_param(raw, pi, param))
                         [] => Err(TrailingParameters(args))
                     }
             }
@@ -117,7 +133,7 @@ Cliff := {}.{
     }
     Param := {}.{
         Kind : [Value, Values]
-        Info := { kind: Kind, name: Str, mandatory: Bool ??, Bool.True,  help: Str ?? "" }.{
+        Info := { kind: Kind, name: Str, mandatory: Bool ?? Bool.True,  help: Str ?? "" }.{
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.name == other.name
@@ -132,7 +148,7 @@ Cliff := {}.{
             values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: dummy}
 
             optional : Spec -> Spec
-            optional = |s| { ..spec, info: { ..spec.info, mandatory: Bool.False }}
+            optional = |spec| { ..spec, info: { ..spec.info, mandatory: Bool.False }}
 
             help : Spec, Str -> Spec
             help = |spec, s| { ..spec, info: { ..spec.info, help: s }}
@@ -300,3 +316,25 @@ expect {
             Param.Spec.value("expr").info,
             Param.Spec.values("files").optional().info,
         ])?
+expect {
+    Err(MandatoryParamAfterOptional("files")) == Cliff.tokenise(
+        ["-v", "error", "f.txt", "g.txt"],
+        [
+            Opt.Spec.flag("invert").short("v").info,
+        ],
+        [
+            Param.Spec.value("expr").optional().info,
+            Param.Spec.values("files").info,
+        ])
+}
+expect {
+    Err(VariadicParamNotLast("files")) == Cliff.tokenise(
+        ["-v", "error", "f.txt", "g.txt"],
+        [
+            Opt.Spec.flag("invert").short("v").info,
+        ],
+        [
+            Param.Spec.values("files").info,
+            Param.Spec.value("expr").info,
+        ])
+}
