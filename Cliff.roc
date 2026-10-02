@@ -202,35 +202,45 @@ expect ["one", "2", "three", "4", "five"] == convert_values(["one", "2", "three"
 
 expect {
     expr_spec = Param.Spec.value("expr")
-    "one" == (expr_spec.convert)(Cliff.tokenise(
-        ["one"], [], [expr_spec.info])?.params.get(expr_spec.info.name).ok_or([]))?
+    "one" == Cliff.tokenise(["one"], [], [expr_spec.info])?
+        .params.get(expr_spec.info.name).ok_or([])
+        |> (expr_spec.convert)()?
 }
 expect {
     expr_spec = Param.Spec.values("expr")
-    ["one", "two", "3"] == (expr_spec.convert)(Cliff.tokenise(
-        ["one", "two", "3"], [], [expr_spec.info])?.params.get(expr_spec.info.name).ok_or([]))?
+    ["one", "two", "3"] == Cliff.tokenise(["one", "two", "3"], [], [expr_spec.info])?
+        .params.get(expr_spec.info.name).ok_or([])
+        |> (expr_spec.convert)()?
 }
 expect {
     expr_spec = Opt.Spec.values("expr").short("x")
-    ["one", "two", "3"] == (expr_spec.convert)(Cliff.tokenise(
-        ["--expr", "one", "--expr=two", "--expr", "3"], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+    ["one", "two", "3"] == Cliff.tokenise(["--expr", "one", "--expr=two", "--expr", "3"], [expr_spec.info], [])?
+        .opts.get(expr_spec.info.long).ok_or([])
+        |> (expr_spec.convert)()?
 }
 expect {
     expr_spec = Opt.Spec.count("expr").short("x")
-    0 == (expr_spec.convert)(Cliff.tokenise([], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+    0 == Cliff.tokenise([], [expr_spec.info], [])?
+        .opts.get(expr_spec.info.long).ok_or([])
+        |> (expr_spec.convert)()?
 }
 expect {
     expr_spec = Opt.Spec.count("expr").short("x")
-    5 == (expr_spec.convert)(Cliff.tokenise(["-xxxxx"], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+    5 == Cliff.tokenise(["-xxxxx"], [expr_spec.info], [])?
+        .opts.get(expr_spec.info.long).ok_or([])
+        |> (expr_spec.convert)()?
 }
 expect {
     expr_spec = Opt.Spec.value("expr").short("x")
-    Err(NotFound) == (expr_spec.convert)(Cliff.tokenise([], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))
+    Err(NotFound) == Cliff.tokenise([], [expr_spec.info], [])?
+        .opts.get(expr_spec.info.long).ok_or([])
+        |> (expr_spec.convert)()
 }
 expect {
     expr_spec = Opt.Spec.value("expr")
-    "some expression"
-        == (expr_spec.convert)(Cliff.tokenise(["--expr", "some expression"], [expr_spec.info], [])?.opts.get(expr_spec.info.long).ok_or([]))?
+    "some expression" == Cliff.tokenise(["--expr", "some expression"], [expr_spec.info], [])?
+        .opts.get(expr_spec.info.long).ok_or([])
+        |> (expr_spec.convert)()?
 }
 expect {
     quiet_spec = Opt.Spec.flag("quiet").short("q")
