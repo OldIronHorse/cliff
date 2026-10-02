@@ -140,10 +140,10 @@ Cliff := {}.{
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound])}.{
             value : Str -> Spec(Str)
-            value = |name| Spec.{ info: Info.{ name, kind: Value }, convert: dummy }
+            value = |name| Spec.{ info: Info.{ name, kind: Value }, convert: convert_value }
 
             values : Str -> Spec(List(Str))
-            values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: dummy}
+            values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: convert_values}
 
             optional : Spec -> Spec
             optional = |spec| { ..spec, info: { ..spec.info, mandatory: Bool.False }}
@@ -200,6 +200,16 @@ expect [] == convert_values([])?
 expect ["one"]== convert_values(["one"])?
 expect ["one", "2", "three", "4", "five"] == convert_values(["one", "2", "three", "4", "five"])?
 
+expect {
+    expr_spec = Param.Spec.value("expr")
+    "one" == (expr_spec.convert)(Cliff.tokenise(
+        ["one"], [], [expr_spec.info])?.params.get(expr_spec.info.name).ok_or([]))?
+}
+expect {
+    expr_spec = Param.Spec.values("expr")
+    ["one", "two", "3"] == (expr_spec.convert)(Cliff.tokenise(
+        ["one", "two", "3"], [], [expr_spec.info])?.params.get(expr_spec.info.name).ok_or([]))?
+}
 expect {
     expr_spec = Opt.Spec.values("expr").short("x")
     ["one", "two", "3"] == (expr_spec.convert)(Cliff.tokenise(
