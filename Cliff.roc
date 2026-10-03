@@ -32,6 +32,21 @@ Cliff := {}.{
             }
         }
 
+    with_param : Cli(a -> b) , Cliff.Param.Spec(a) -> Cli(b)
+    with_param = |cli, spec|
+        Cli.{
+            opt_infos: cli.opt_infos,
+            param_infos: cli.param_infos.append(spec.info),
+            assemble: |raw| {
+                f = (cli.assemble)(raw)?
+                raw.params.get(spec.info.name)
+                    .ok_or([])
+                    |> (spec.convert)()?
+                    |> f
+                    |> Ok
+            }
+        }
+
     Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
 
     TokenError : [
@@ -192,6 +207,13 @@ expect {
         |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
         |> Cliff.with_opt(Opt.Spec.value("file"))
     { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "--file", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file"))
+    { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "f.txt"])?
 }
 
 upsert : Dict(a, List(b)), a, b -> Dict(a, List(b))
