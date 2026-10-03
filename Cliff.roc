@@ -1,4 +1,37 @@
 Cliff := {}.{
+    Cli(a) := {
+        opt_infos: List(Cliff.Opt.Info),
+        param_infos: List(Cliff.Param.Info),
+        assemble: Cliff.Raw -> Try(a, [NotFound, TypeMismatch]),
+    }.{
+        parse : Cli(a), List(Str) -> Try(a, TokenError)
+        parse = |cli, argv|
+            match tokenise(argv, cli.opt_infos, cli.param_infos)?
+                |> cli.assemble {
+                    Ok(a) => Ok(a)
+                    Err(NotFound) => Err(MissingValue(""))
+                    Err(TypeMismatch)=> Err(UnexpectedValue(""))
+            }
+    }
+
+    succeed : a -> Cli(a)
+    succeed = |value| Cli.{ opt_infos: [], param_infos: [], assemble: |_| Ok(value) }
+
+    with_opt : Cli(a -> b) , Cliff.Opt.Spec(a) -> Cli(b)
+    with_opt = |cli, spec|
+        Cli.{
+            opt_infos: cli.opt_infos.append(spec.info),
+            param_infos: cli.param_infos,
+            assemble: |raw| {
+                f = (cli.assemble)(raw)?
+                raw.opts.get(spec.info.long)
+                    .ok_or([])
+                    |> (spec.convert)()?
+                    |> f
+                    |> Ok
+            }
+        }
+
     Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
 
     TokenError : [
@@ -154,6 +187,13 @@ Cliff := {}.{
     }
 }
 
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "--file", "f.txt"])?
+}
+
 upsert : Dict(a, List(b)), a, b -> Dict(a, List(b))
     where [a.is_eq : a, a -> Bool, a.to_hash : a, Hasher -> Hasher]
 upsert = |d, k, v|
@@ -162,9 +202,6 @@ upsert = |d, k, v|
             Ok(vs) => Ok(vs.append(v))
             Err(Missing) => Ok([v])
         })
-
-dummy : List(Str) -> Try(a, [TypeMismatch, NotFound])
-dummy = |_| Err(NotFound)
 
 convert_flag: List(Str) -> Try(Bool, [TypeMismatch, NotFound])
 convert_flag = |vs|
