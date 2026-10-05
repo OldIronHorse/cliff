@@ -183,6 +183,17 @@ Cliff := {}.{
             short : Spec(a), Str -> Spec(a)
             short = |spec, s| { ..spec, info: { ..spec.info, short: s } }
 
+            default : Spec(Optional(a)), a -> Spec(a)
+            default = |spec, def| {
+                info: spec.info
+                convert: |ov|
+                    match (spec.convert)(ov) {
+                        Ok(None) => Ok(def)
+                        Ok(Some(v)) => Ok(v)
+                        Err(e) => Err(e)
+                    }
+            }
+
             help : Spec(a), Str -> Spec(a)
             help = |spec, s| { ..spec, info: { ..spec.info, help: s } }
         }
@@ -247,6 +258,13 @@ expect {
         |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
         |> Cliff.with_opt(Opt.Spec.value("file"))
     { verbosity: 0, file: Some("f.txt") } == cli.parse(["--file", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_opt(Opt.Spec.value("file").default("d.txt"))
+    { verbosity: 0, file: "d.txt" } == cli.parse([])?
 }
 
 expect {
