@@ -15,9 +15,7 @@ Cliff := {}.{
     succeed = |value| Cli.{ opt_infos: [], param_infos: [], assemble: |_| Ok(value) }
 
     AssembleError(errs) : [
-        MissingOpt(Str),
         InvalidOptValue(Str, List(Str)),
-        MissingParam(Str),
         InvalidParamValue(Str, List(Str)),
         ..errs
     ]
@@ -34,7 +32,7 @@ Cliff := {}.{
                 vs = raw.opts.get(spec.info.long).ok_or([])
                 match (spec.convert)(vs) {
                     Ok(v) => Ok(f(v))
-                    Err(NotFound) => Err(MissingOpt(spec.info.long))
+                    Err(NotFound) => { crash "unreachable #1" }
                     Err(TypeMismatch) => Err(InvalidOptValue(spec.info.long, vs))
                 }
             }
@@ -50,7 +48,7 @@ Cliff := {}.{
                 vs = raw.params.get(spec.info.name).ok_or([])
                 match (spec.convert)(vs) {
                     Ok(v) => Ok(f(v))
-                    Err(NotFound) => Err(MissingParam(spec.info.name))
+                    Err(NotFound) => { crash "unreachable #2" }
                     Err(TypeMismatch) => Err(InvalidParamValue(spec.info.name, vs))
                 }
             }
@@ -183,15 +181,16 @@ Cliff := {}.{
             short : Spec(a), Str -> Spec(a)
             short = |spec, s| { ..spec, info: { ..spec.info, short: s } }
 
+            integer : Spec(Optional(Str)) -> Spec(Optional(I64))
+            integer = |spec| {
+                info: spec.info,
+                convert: to_optional_integer(spec.convert)
+            }
+
             default : Spec(Optional(a)), a -> Spec(a)
             default = |spec, def| {
-                info: spec.info
-                convert: |ov|
-                    match (spec.convert)(ov) {
-                        Ok(None) => Ok(def)
-                        Ok(Some(v)) => Ok(v)
-                        Err(e) => Err(e)
-                    }
+                info: spec.info,
+                convert: with_default(spec.convert, def)
             }
 
             help : Spec(a), Str -> Spec(a)
@@ -214,21 +213,22 @@ Cliff := {}.{
             values : Str -> Spec(List(Str))
             values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: convert_values}
 
+            integer : Spec(Str) -> Spec(I64)
+            integer = |spec| {
+                info: spec.info,
+                convert: to_integer(spec.convert)
+            }
+
             optional : Spec(a) -> Spec(Optional(a))
             optional = |spec| {
-                    info: { ..spec.info, mandatory: Bool.False },
-                    convert: make_optional(spec.convert),
-                }
+                info: { ..spec.info, mandatory: Bool.False },
+                convert: make_optional(spec.convert),
+            }
 
             default : Spec(Optional(a)), a -> Spec(a)
             default = |spec, def| {
-                info: spec.info
-                convert: |ov|
-                    match (spec.convert)(ov) {
-                        Ok(None) => Ok(def)
-                        Ok(Some(v)) => Ok(v)
-                        Err(e) => Err(e)
-                    }
+                info: spec.info,
+                convert: with_default(spec.convert, def)
             }
 
             help : Spec, Str -> Spec
@@ -237,14 +237,71 @@ Cliff := {}.{
     }
 }
 
+to_integer : (List(Str) -> Try(Str, [TypeMismatch, NotFound]))
+   -> (List(Str) -> Try(I64, [TypeMismatch, NotFound]))
+to_integer = |converter|
+    |ov|
+        match converter(ov)? |> I64.from_str() {
+            Ok(n) => Ok(n)
+            Err(_) => Err(TypeMismatch)
+        }
+
+to_optional_integer : (List(Str) -> Try(Optional(Str), [TypeMismatch, NotFound]))
+   -> (List(Str) -> Try(Optional(I64), [TypeMismatch, NotFound]))
+to_optional_integer = |converter|
+    |ov| match converter(ov)? {
+        None => Ok(None)
+        Some(v) =>
+            match I64.from_str(v) {
+                Ok(n) => Ok(Some(n))
+                Err(_) => Err(TypeMismatch)
+            }
+    }
+
+with_default : (List(Str) -> Try(Optional(a), e)), a -> (List(Str) -> Try(a, e))
+with_default = |converter, def|
+    |ov| match converter(ov) {
+        Ok(None) => Ok(def)
+        Ok(Some(v)) => Ok(v)
+        Err(e) => Err(e)
+    }
+
 make_optional : (List(Str) -> Try(a, [TypeMismatch, NotFound]))
-   -> (List(Str) -> Try(Optional(a), [TypeMismatch, NotFound]))
+    -> (List(Str) -> Try(Optional(a), [TypeMismatch, NotFound]))
 make_optional = |converter|
     |v| match converter(v) {
         Ok(s) => Ok(Some(s))
         Err(NotFound) => Ok(None)
         Err(e) => Err(e)
     }
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.value("verbosity").integer())
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    Err(InvalidOptValue("verbosity", ["two"])) == cli.parse(["--verbosity", "two"])
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.value("verbosity").integer().default(56))
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: 56, file: None } == cli.parse([])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |length| { verbosity, length })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity"))
+        |> Cliff.with_param(Param.Spec.value("length").integer())
+    { verbosity: 0, length: 32 } == cli.parse(["32"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |length| { verbosity, length })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity"))
+        |> Cliff.with_param(Param.Spec.value("length").integer())
+    Err(InvalidParamValue("length", ["two"])) == cli.parse(["two"])
+}
 
 expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
