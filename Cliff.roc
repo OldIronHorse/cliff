@@ -70,15 +70,15 @@ Cliff := {}.{
         ..errs
     ]
 
-    add_opt : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
+    add_opt : Raw, Cliff.Opt.Info, Optional(Str) -> Try(Raw, _)
     add_opt = |raw, info, maybe_value|
         match (info.kind, maybe_value) {
-            (Value, Err(NoValue)) | (Values, Err(NoValue)) => Err(MissingValue(info.long))
-            (Value, Ok(_)) if raw.opts.contains(info.long) => Err(RepeatedOption(info.long))
-            (Value, Ok(v)) => Ok({ ..raw, opts: raw.opts.insert(info.long, [v]) })
-            (Values, Ok(v)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, v) })
-            (_, Ok(_)) => Err(UnexpectedValue(info.long))
-            (_, Err(NoValue)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, "") })
+            (Value, None) | (Values, None) => Err(MissingValue(info.long))
+            (Value, Some(_)) if raw.opts.contains(info.long) => Err(RepeatedOption(info.long))
+            (Value, Some(v)) => Ok({ ..raw, opts: raw.opts.insert(info.long, [v]) })
+            (Values, Some(v)) => Ok({ ..raw, opts: upsert(raw.opts, info.long, v) })
+            (_, Some(_)) => Err(UnexpectedValue(info.long))
+            (_, None) => Ok({ ..raw, opts: upsert(raw.opts, info.long, "") })
         }
 
     add_param : Raw, Cliff.Param.Info, Str -> Raw
@@ -122,17 +122,17 @@ Cliff := {}.{
                 [opt, .. as rest] if opt.starts_with("--") =>
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
-                            do(rest, p_infos, add_opt(raw, get_opt_info(opt_infos_by_name, before)?, Ok(after))?)
+                            do(rest, p_infos, add_opt(raw, get_opt_info(opt_infos_by_name, before)?, Some(after))?)
                         }
                         Err(NotFound) => {
                             match get_opt_info(opt_infos_by_name, opt.drop_prefix("--"))? {
                                 i if i.kind == Value or i.kind == Values =>
                                     match rest {
                                         [value, .. as rest1] =>
-                                            do(rest1, p_infos, add_opt(raw, i, Ok(value))?)
+                                            do(rest1, p_infos, add_opt(raw, i, Some(value))?)
                                         _ => Err(MissingValue(i.long))
                                     }
-                                i => do(rest, p_infos, add_opt(raw, i, Err(NoValue))?)
+                                i => do(rest, p_infos, add_opt(raw, i, None)?)
                             }
                         }
                     }
@@ -142,7 +142,7 @@ Cliff := {}.{
                         .fold_try(raw, |r, c|
                             match Str.from_utf8([c]) {
                                 Ok(s) =>
-                                    add_opt(r, get_opt_info(opt_infos_by_name, s)?, Err(NoValue))
+                                    add_opt(r, get_opt_info(opt_infos_by_name, s)?, None)
                                 _ => Err(UnexpectedValue(opt))
                             })?)
                 [param, .. as rest] =>
