@@ -2,20 +2,27 @@ Cliff := {}.{
     Cli(a) := {
         opt_infos: List(Cliff.Opt.Info),
         param_infos: List(Cliff.Param.Info),
-        assemble: Cliff.Raw -> Try(a, [NotFound, TypeMismatch]),
+        assemble: Cliff.Raw -> Try(a, AssembleError),
     }.{
-        parse : Cli(a), List(Str) -> Try(a, TokenError)
+        parse : Cli(a), List(Str) -> Try(a, _)
         parse = |cli, argv|
-            match tokenise(argv, cli.opt_infos, cli.param_infos)?
-                |> cli.assemble {
-                    Ok(a) => Ok(a)
-                    Err(NotFound) => Err(MissingValue(""))
-                    Err(TypeMismatch)=> Err(UnexpectedValue(""))
-            }
+            tokenise(argv, cli.opt_infos, cli.param_infos)?
+                |> cli.assemble
+                |> Try.map_err(|e| e)
     }
 
     succeed : a -> Cli(a)
     succeed = |value| Cli.{ opt_infos: [], param_infos: [], assemble: |_| Ok(value) }
+
+    AssembleError(errs) : [
+        MissingOpt(Str),
+        InvalidOptValue(Str, List(Str)),
+        MissingParam(Str),
+        InvalidParamValue(Str, List(Str)),
+        ..errs
+    ]
+
+    Optional(a) : [Some(a), None]
 
     with_opt : Cli(a -> b) , Cliff.Opt.Spec(a) -> Cli(b)
     with_opt = |cli, spec|
@@ -24,11 +31,12 @@ Cliff := {}.{
             param_infos: cli.param_infos,
             assemble: |raw| {
                 f = (cli.assemble)(raw)?
-                raw.opts.get(spec.info.long)
-                    .ok_or([])
-                    |> (spec.convert)()?
-                    |> f
-                    |> Ok
+                vs = raw.opts.get(spec.info.long).ok_or([])
+                match (spec.convert)(vs) {
+                    Ok(v) => Ok(f(v))
+                    Err(NotFound) => Err(MissingOpt(spec.info.long))
+                    Err(TypeMismatch) => Err(InvalidOptValue(spec.info.long, vs))
+                }
             }
         }
 
@@ -39,17 +47,18 @@ Cliff := {}.{
             param_infos: cli.param_infos.append(spec.info),
             assemble: |raw| {
                 f = (cli.assemble)(raw)?
-                raw.params.get(spec.info.name)
-                    .ok_or([])
-                    |> (spec.convert)()?
-                    |> f
-                    |> Ok
+                vs = raw.params.get(spec.info.name).ok_or([])
+                match (spec.convert)(vs) {
+                    Ok(v) => Ok(f(v))
+                    Err(NotFound) => Err(MissingParam(spec.info.name))
+                    Err(TypeMismatch) => Err(InvalidParamValue(spec.info.name, vs))
+                }
             }
         }
 
     Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
 
-    TokenError : [
+    TokenError(errs) : [
         UnknownOption(Str),
         MissingValue(Str),
         UnexpectedValue(Str),
@@ -58,6 +67,7 @@ Cliff := {}.{
         VariadicParamNotLast(Str),
         MissingArguments(List(Str)),
         MandatoryParamAfterOptional(Str),
+        ..errs
     ]
 
     add_opt : Raw, Cliff.Opt.Info, Try(Str, [NoValue]) -> Try(Raw, _)
@@ -164,8 +174,8 @@ Cliff := {}.{
             flag : Str -> Spec(Bool)
             flag = |long| Spec.{ info: Info.{ kind: Flag, long }, convert: convert_flag }
 
-            value : Str -> Spec(Str)
-            value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: convert_value }
+            value : Str -> Spec(Optional(Str))
+            value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: convert_optional_value }
 
             values : Str -> Spec(List(Str))
             values = |long| Spec.{ info: Info.{ kind: Values, long }, convert: convert_values}
@@ -193,8 +203,22 @@ Cliff := {}.{
             values : Str -> Spec(List(Str))
             values = |name| Spec.{ info: Info.{ name, kind: Values }, convert: convert_values}
 
-            optional : Spec -> Spec
-            optional = |spec| { ..spec, info: { ..spec.info, mandatory: Bool.False }}
+            optional : Spec(a) -> Spec(Optional(a))
+            optional = |spec| {
+                    info: { ..spec.info, mandatory: Bool.False },
+                    convert: make_optional(spec.convert),
+                }
+
+            default : Spec(Optional(a)), a -> Spec(a)
+            default = |spec, def| {
+                info: spec.info
+                convert: |ov|
+                    match (spec.convert)(ov) {
+                        Ok(None) => Ok(def)
+                        Ok(Some(v)) => Ok(v)
+                        Err(e) => Err(e)
+                    }
+            }
 
             help : Spec, Str -> Spec
             help = |spec, s| { ..spec, info: { ..spec.info, help: s }}
@@ -202,17 +226,75 @@ Cliff := {}.{
     }
 }
 
+make_optional : (List(Str) -> Try(a, [TypeMismatch, NotFound]))
+   -> (List(Str) -> Try(Optional(a), [TypeMismatch, NotFound]))
+make_optional = |converter|
+    |v| match converter(v) {
+        Ok(s) => Ok(Some(s))
+        Err(NotFound) => Ok(None)
+        Err(e) => Err(e)
+    }
+
 expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
         |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
         |> Cliff.with_opt(Opt.Spec.value("file"))
-    { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "--file", "f.txt"])?
+    { verbosity: 1, file: Some("f.txt") } == cli.parse(["-v", "--file", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: 0, file: Some("f.txt") } == cli.parse(["--file", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: 0, file: None } == cli.parse([])?
 }
 
 expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
         |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
         |> Cliff.with_param(Param.Spec.value("file"))
+    { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file"))
+    Err(MissingArguments(["file"])) == cli.parse(["-v"])
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file").optional())
+    { verbosity: 1, file: None } == cli.parse(["-v"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file").optional().default("def.txt"))
+    { verbosity: 1, file: "def.txt" } == cli.parse(["-v"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file").optional())
+    { verbosity: 1, file: Some("f.txt") } == cli.parse(["-v", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file").optional().default("def.txt"))
     { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "f.txt"])?
 }
 
@@ -230,6 +312,13 @@ convert_flag = |vs|
     match vs {
         [] => Ok(Bool.False)
         _ => Ok(Bool.True)
+    }
+
+convert_optional_value: List(Str) -> Try(Optional(Str), [TypeMismatch, NotFound])
+convert_optional_value = |vs|
+    match vs {
+        [] => Ok(None)
+        [v, ..] => Ok(Some(v))
     }
 
 convert_value: List(Str) -> Try(Str, [TypeMismatch, NotFound])
@@ -291,13 +380,13 @@ expect {
 }
 expect {
     expr_spec = Opt.Spec.value("expr").short("x")
-    Err(NotFound) == Cliff.tokenise([], [expr_spec.info], [])?
+    None == Cliff.tokenise([], [expr_spec.info], [])?
         .opts.get(expr_spec.info.long).ok_or([])
-        |> (expr_spec.convert)()
+        |> (expr_spec.convert)()?
 }
 expect {
     expr_spec = Opt.Spec.value("expr")
-    "some expression" == Cliff.tokenise(["--expr", "some expression"], [expr_spec.info], [])?
+    Some("some expression") == Cliff.tokenise(["--expr", "some expression"], [expr_spec.info], [])?
         .opts.get(expr_spec.info.long).ok_or([])
         |> (expr_spec.convert)()?
 }
