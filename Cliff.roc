@@ -303,14 +303,18 @@ make_optional = |converter|
     }
 
 expect {
-    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+    cli = Cliff.succeed(|verbosity| |speed| { verbosity, speed })
         |> Cliff.with_opt_group([
             (Opt.Spec.flag("high").short("h"), High),
             (Opt.Spec.flag("med"), Medium),
             (Opt.Spec.flag("low"), Low),
         ], Low)
-        |> Cliff.with_opt(Opt.Spec.value("file"))
-    Err(ConflictingOpts(["high", "med"])) == cli.parse(["--med", "-h"])
+        |> Cliff.with_opt_group([
+            (Opt.Spec.flag("high").short("h"), High),
+            (Opt.Spec.flag("fast"), Fast),
+            (Opt.Spec.flag("faster"), Faster),
+        ], Fast)
+    Err(RepeatedOption("high")) == cli.parse([])
 }
 
 expect {
