@@ -17,10 +17,27 @@ Cliff := {}.{
     AssembleError(errs) : [
         InvalidOptValue(Str, List(Str)),
         InvalidParamValue(Str, List(Str)),
+        ConflictingOpts(List(Str)),
         ..errs
     ]
 
     Optional(a) : [Some(a), None]
+
+    with_opt_group : Cli(a -> b), List((Cliff.Opt.Spec(Bool), a)), a -> Cli(b)
+    with_opt_group = |cli, specs, default|
+        Cli.{
+            opt_infos: cli.opt_infos.concat(specs.map(|(spec, _)| spec.info)),
+            param_infos: cli.param_infos,
+            assemble: |raw| {
+                f = (cli.assemble)(raw)?
+                match specs
+                    .keep_oks(|(spec, value)| raw.opts.get(spec.info.long).map_ok(|_| (spec, value))) {
+                        [] => Ok(f(default))
+                        [(_, v)] => Ok(f(v))
+                        vs => Err(ConflictingOpts(vs.map(|(s, _)| s.info.long)))
+                }
+            }
+        }
 
     with_opt : Cli(a -> b) , Cliff.Opt.Spec(a) -> Cli(b)
     with_opt = |cli, spec|
@@ -284,6 +301,50 @@ make_optional = |converter|
         Err(NotFound) => Ok(None)
         Err(e) => Err(e)
     }
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt_group([
+            (Opt.Spec.flag("high").short("h"), High),
+            (Opt.Spec.flag("med"), Medium),
+            (Opt.Spec.flag("low"), Low),
+        ], Low)
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    Err(ConflictingOpts(["high", "med"])) == cli.parse(["--med", "-h"])
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt_group([
+            (Opt.Spec.flag("high"), High),
+            (Opt.Spec.flag("med"), Medium),
+            (Opt.Spec.flag("low"), Low),
+        ], Low)
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: Medium, file: None } == cli.parse(["--med"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt_group([
+            (Opt.Spec.flag("high"), High),
+            (Opt.Spec.flag("med").short("m"), Medium),
+            (Opt.Spec.flag("low"), Low),
+        ], Low)
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: Medium, file: None } == cli.parse(["--med", "-m", "--med"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt_group([
+            (Opt.Spec.flag("high"), High),
+            (Opt.Spec.flag("med"), Medium),
+            (Opt.Spec.flag("low"), Low),
+        ], Low)
+        |> Cliff.with_opt(Opt.Spec.value("file"))
+    { verbosity: Low, file: None } == cli.parse([])?
+}
 
 expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
