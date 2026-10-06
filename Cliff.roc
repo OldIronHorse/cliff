@@ -175,6 +175,13 @@ Cliff := {}.{
             value : Str -> Spec(Optional(Str))
             value = |long| Spec.{ info: Info.{ kind: Value, long }, convert: convert_optional_value }
 
+            one_of : Str, List((Str, a)) -> Spec(Optional(a))
+            one_of = |long, options|
+                Spec.{
+                    info: Info.{ kind: Value, long },
+                    convert: convert_one_of(Dict.from_list(options))
+                }
+
             values : Str -> Spec(List(Str))
             values = |long| Spec.{ info: Info.{ kind: Values, long }, convert: convert_values}
 
@@ -218,6 +225,9 @@ Cliff := {}.{
                 info: spec.info,
                 convert: to_integer(spec.convert)
             }
+
+            optionals : Spec(List(a)) -> Spec(List(a))
+            optionals = |spec| { ..spec, info: { ..spec.info, mandatory: Bool.False } }
 
             optional : Spec(a) -> Spec(Optional(a))
             optional = |spec| {
@@ -346,6 +356,27 @@ expect {
 }
 
 expect {
+    cli = Cliff.succeed(|verbosity| |files| { verbosity, files })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.values("files"))
+    Err(MissingArguments(["files"])) == cli.parse(["-v"])
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |files| { verbosity, files })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.values("files").optionals())
+    { verbosity: 1, files: [] } == cli.parse(["-v"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |files| { verbosity, files })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.values("files").optionals())
+    { verbosity: 1, files: ["a.txt", "b.txt"] } == cli.parse(["-v", "a.txt", "b.txt"])?
+}
+
+expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
         |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
         |> Cliff.with_param(Param.Spec.value("file").optional())
@@ -368,8 +399,22 @@ expect {
 
 expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
-        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_opt(Opt.Spec.one_of("verbosity",[("l", Low), ("m", Medium), ("h", High)]))
         |> Cliff.with_param(Param.Spec.value("file").optional().default("def.txt"))
+    { verbosity: Some(Low), file: "f.txt" } == cli.parse(["--verbosity", "l", "f.txt"])?
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.one_of("verbosity",[("l", Low), ("m", Medium), ("h", High)]))
+        |> Cliff.with_param(Param.Spec.value("file").optional().default("def.txt"))
+    Err(InvalidOptValue("verbosity", ["low"])) == cli.parse(["--verbosity", "low", "f.txt"])
+}
+
+expect {
+    cli = Cliff.succeed(|verbosity| |file|{ verbosity, file })
+        |> Cliff.with_opt(Opt.Spec.count("verbosity").short("v"))
+        |> Cliff.with_param(Param.Spec.value("file"))
     { verbosity: 1, file: "f.txt" } == cli.parse(["-v", "f.txt"])?
 }
 
@@ -408,6 +453,16 @@ convert_values = |vs| Ok(vs)
 
 convert_count: List(Str) -> Try(U64, [TypeMismatch, NotFound])
 convert_count = |vs| Ok(vs.len())
+
+convert_one_of : Dict(Str, a) -> (List(Str) -> Try(Optional(a), [TypeMismatch, NotFound]))
+convert_one_of = |lookup| |vs|
+    match vs {
+        [] => Ok(None)
+        [v, ..] => lookup.get(v).map_both(|value| Some(value), |_| TypeMismatch)
+    }
+
+expect Some(5) == convert_one_of(Dict.from_list([("one", 1), ("five", 5), ("seven", 7)]))(["five"])?
+expect Err(TypeMismatch) == convert_one_of(Dict.from_list([("one", 1), ("five", 5), ("seven", 7)]))(["six"])
 
 expect Bool.True == convert_flag([""])?
 expect Bool.False == convert_flag([])?
