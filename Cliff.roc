@@ -3,29 +3,41 @@ Cliff := {}.{
         opt_infos: List(Cliff.Opt.Info),
         param_infos: List(Cliff.Param.Info),
         assemble: Cliff.Raw -> Try(a, AssembleError),
+        usage: Str ?? "",
     }.{
-        parse : Cli(a), List(Str) -> Try(a, _)
+        #parse : Cli(a), List(Str) -> Try(a, _)
         parse = |cli, argv|
             tokenise(argv, cli.opt_infos, cli.param_infos)?
                 |> cli.assemble
-                |> Try.map_err(|e| e)
+
+        to_help_str = |self| {
+            self.opt_infos
+                .map(|i| i.to_help_str())
+                .prepend(self.usage)
+                |> Str.join_with("\n")
+        }
     }
 
     succeed : a -> Cli(a)
     succeed = |value| Cli.{ opt_infos: [], param_infos: [], assemble: |_| Ok(value) }
 
-    AssembleError(errs) : [
+    AssembleError : [
         InvalidOptValue(Str, List(Str)),
         InvalidParamValue(Str, List(Str)),
         ConflictingOpts(List(Str)),
-        ..errs
     ]
 
     Optional(a) : [Some(a), None]
 
+    with_usage : Cli(a), Str -> Cli(a)
+    with_usage = |cli, usage| {
+       { ..cli, usage }
+    }
+
     with_opt_group : Cli(a -> b), List((Cliff.Opt.Spec(Bool), a)), a -> Cli(b)
     with_opt_group = |cli, specs, default|
         Cli.{
+            usage: cli.usage,
             opt_infos: cli.opt_infos.concat(specs.map(|(spec, _)| spec.info)),
             param_infos: cli.param_infos,
             assemble: |raw| {
@@ -42,6 +54,7 @@ Cliff := {}.{
     with_opt : Cli(a -> b) , Cliff.Opt.Spec(a) -> Cli(b)
     with_opt = |cli, spec|
         Cli.{
+            usage: cli.usage,
             opt_infos: cli.opt_infos.append(spec.info),
             param_infos: cli.param_infos,
             assemble: |raw| {
@@ -58,6 +71,7 @@ Cliff := {}.{
     with_param : Cli(a -> b) , Cliff.Param.Spec(a) -> Cli(b)
     with_param = |cli, spec|
         Cli.{
+            usage: cli.usage,
             opt_infos: cli.opt_infos,
             param_infos: cli.param_infos.append(spec.info),
             assemble: |raw| {
@@ -152,14 +166,22 @@ Cliff := {}.{
                         }
                     }
                 [opt, .. as rest] if opt.starts_with("-") =>
-                    do(rest, p_infos, opt.drop_prefix("-")
-                        .to_utf8()
-                        .fold_try(raw, |r, c|
-                            match Str.from_utf8([c]) {
-                                Ok(s) =>
-                                    add_opt(r, get_opt_info(opt_infos_by_name, s)?, None)
-                                _ => Err(UnexpectedValue(opt))
-                            })?)
+                    match opt.drop_prefix("-") {
+                        #tags if tags.count_utf8_bytes() == 1 and [Value, Values].contains(get_opt_info(opt_infos_by_name, tags)?.kind) =>
+                        #match (rest, get_opt_info(opt_infos_by_name, tags)?) {
+                        #([value, .. as rest1], i) =>
+                        #do(rest1, p_infos, add_opt(raw, i, Some(value))?)
+                        #([], i) => Err(MissingValue(i.long))
+                        #}
+                        tags =>
+                            do(rest, p_infos, tags.to_utf8()
+                                .fold_try(raw, |r, c|
+                                    match Str.from_utf8([c]) {
+                                        Ok(s) =>
+                                            add_opt(r, get_opt_info(opt_infos_by_name, s)?, None)
+                                        _ => Err(UnexpectedValue(opt))
+                                    })?)
+                    }
                 [param, .. as rest] =>
                     match p_infos {
                         [pi] if pi.kind == Values =>
@@ -173,14 +195,27 @@ Cliff := {}.{
         do(argv, param_infos, { opts: Dict.empty(), params: Dict.empty() })
     }
 
+    Help := { text: Str ?? "", symbol: Str ?? "" }
+
     Opt := {}.{
         Kind : [Flag, Count, Value, Values]
-        Info := { kind: Kind, long: Str, short: Str ?? "", help: Str ?? "" }.{
+        Info := { kind: Kind, long: Str, short: Str ?? "", help: Help ?? Help.{} }.{
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.short == other.short
                     and self.long == other.long
-                    and self.help == other.help
+
+            to_help_str = |self| {
+                short = match self.short {
+                    "" => "    "
+                    s => "-${s}, "
+                }
+                long = match self.kind {
+                    Value | Values if self.help.symbol.is_empty().not() => "--${self.long}=${self.help.symbol}"
+                    _ => "--${self.long}"
+                }
+                "${short}${long}\t ${self.help.text}"
+            }
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
             count : Str -> Spec(U64)
@@ -217,8 +252,8 @@ Cliff := {}.{
                 convert: with_default(spec.convert, def)
             }
 
-            help : Spec(a), Str -> Spec(a)
-            help = |spec, s| { ..spec, info: { ..spec.info, help: s } }
+            help : Spec(a), Help -> Spec(a)
+            help = |spec, help| { ..spec, info: { ..spec.info, help } }
         }
     }
     Param := {}.{
@@ -360,8 +395,10 @@ expect {
 expect {
     cli = Cliff.succeed(|verbosity| |file| { verbosity, file })
         |> Cliff.with_opt(Opt.Spec.value("verbosity").integer().default(56))
-        |> Cliff.with_opt(Opt.Spec.value("file"))
-    { verbosity: 56, file: None } == cli.parse([])?
+        |> Cliff.with_opt(Opt.Spec.count("file"))
+        #|> Cliff.with_opt(Opt.Spec.flag("file"))
+    { verbosity: 56, file: 0 } == cli.parse([])?
+    #{ verbosity: 56, file: False } == cli.parse([])?
 }
 
 expect {
@@ -586,6 +623,10 @@ expect {
         |> (expr_spec.convert)()?
 }
 expect {
+    expr_spec = Opt.Spec.value("expr").short("x")
+    Err(MissingValue("expr")) == Cliff.tokenise(["-x3"], [expr_spec.info], [])
+}
+expect {
     quiet_spec = Opt.Spec.flag("quiet").short("q")
     (quiet_spec.convert)(Cliff.tokenise([], [quiet_spec.info], [])?.opts.get(quiet_spec.info.long).ok_or([]))?.not()
 }
@@ -595,8 +636,8 @@ expect {
 }
 
 expect
-    Cliff.Opt.Info.{ kind: Count, short: "v", long: "verbosity", help: "verbosity level" }
-        == Opt.Spec.count("verbosity").short("v").help("verbosity level").info
+    Cliff.Opt.Info.{ kind: Count, short: "v", long: "verbosity", help: { text: "verbosity level" } }
+        == Opt.Spec.count("verbosity").short("v").help({ text: "verbosity level" }).info
 expect
     Cliff.Param.Info.{ kind: Value, name: "file", help: "the file to load" }
         == Param.Spec.value("file").help("the file to load").info
