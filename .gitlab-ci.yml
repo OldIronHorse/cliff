@@ -35,7 +35,7 @@ unit-test-job:   # This job runs in the test stage.
     - tar zxf roc_nightly-linux_x86_64-2026-10-09-258ab27.tar.gz
     - mv roc_nightly-linux_x86_64-2026-10-09-258ab27/roc .
   script:
-    - .roc test App.roc
+    - ./roc test App.roc
 
 lint-test-job:   # This job also runs in the test stage.
   stage: test    # It can run at the same time as unit-test-job (in parallel).
