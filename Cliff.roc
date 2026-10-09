@@ -195,7 +195,7 @@ Cliff := {}.{
                             }
                         }
                     }
-                [opt, .. as rest] if opt.starts_with("-") =>
+                [opt, .. as rest] if opt.starts_with("-") and opt.count_utf8_bytes() > 1 =>
                     match opt.drop_prefix("-") {
                         #tags if tags.count_utf8_bytes() == 1 and [Value, Values].contains(get_opt_info(opt_infos_by_name, tags)?.kind) =>
                         #match (rest, get_opt_info(opt_infos_by_name, tags)?) {
@@ -866,7 +866,6 @@ expect {
             .help("stop after NUM lines selected")
             .symbol("NUM"))
         |> Cliff.with_param(Cliff.Param.Spec.value("file"))
-    dbg cli.to_help_str()
     cli.to_help_str() == \\app [OPTION]... [FILE]...
                          \\description
                          \\example
@@ -879,3 +878,10 @@ expect {
                          \\    --help             display this help text and exit
 }
 
+expect {
+    cli = Cliff.succeed(|invert| |file| { invert, file })
+        |> Cliff.with_opt(Cliff.Opt.Spec.flag("invert").short("v"))
+        |> Cliff.with_param(Cliff.Param.Spec.value("file"))
+    dbg cli.parse(["-"])
+    { invert: False, file: "-" } == cli.parse(["-"])?
+}
