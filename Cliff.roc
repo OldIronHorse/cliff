@@ -212,11 +212,9 @@ Cliff := {}.{
         do(argv, param_infos, { opts: Dict.empty(), params: Dict.empty() })
     }
 
-    Help := { text: Str ?? "", symbol: Str ?? "" }
-
     Opt := {}.{
-        Kind : [Flag, Count, Value, Values, Section]
-        Info := { kind: Kind, long: Str, short: Str ?? "", help: Help ?? Help.{} }.{
+        Kind : [Flag, Count, Value, Values]
+        Info := { kind: Kind, long: Str, short: Str ?? "", help: Str ?? "", symbol: Str ?? ""}.{
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.short == other.short
@@ -228,10 +226,10 @@ Cliff := {}.{
                     s => "-${s}, "
                 }
                 long = match self.kind {
-                    Value | Values if self.help.symbol.is_empty().not() => "--${self.long}=${self.help.symbol}"
+                    Value | Values if self.symbol.is_empty().not() => "--${self.long}=${self.symbol}"
                     _ => "--${self.long}"
                 }
-                "${short}${long}\t ${self.help.text}"
+                "${short}${long}\t ${self.help}"
             }
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
@@ -269,8 +267,11 @@ Cliff := {}.{
                 convert: with_default(spec.convert, def)
             }
 
-            help : Spec(a), Help -> Spec(a)
+            help : Spec(a), Str -> Spec(a)
             help = |spec, help| { ..spec, info: { ..spec.info, help } }
+
+            symbol : Spec(a), Str -> Spec(a)
+            symbol = |spec, symbol| { ..spec, info: { ..spec.info, symbol } }
         }
     }
     Param := {}.{
@@ -653,8 +654,8 @@ expect {
 }
 
 expect
-    Cliff.Opt.Info.{ kind: Count, short: "v", long: "verbosity", help: { text: "verbosity level" } }
-        == Opt.Spec.count("verbosity").short("v").help({ text: "verbosity level" }).info
+    Cliff.Opt.Info.{ kind: Count, short: "v", long: "verbosity", help: "verbosity level" }
+        == Opt.Spec.count("verbosity").short("v").help("verbosity level").info
 expect
     Cliff.Param.Info.{ kind: Value, name: "file", help: "the file to load" }
         == Param.Spec.value("file").help("the file to load").info

@@ -32,41 +32,45 @@ cli_grep = Cliff.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |i
         [
             (Cliff.Opt.Spec.flag("extended-regexp")
                 .short("E")
-                .help({ text: "PATTERNS are extended regular expressions" }), Extended),
+                .help("PATTERNS are extended regular expressions"), Extended),
             (Cliff.Opt.Spec.flag("fixed-strings")
                 .short("F")
-                .help({ text: "PATTERNS are strings" }), Fixed),
+                .help("PATTERNS are strings"), Fixed),
             (Cliff.Opt.Spec.flag("basic-regexp")
                 .short("G")
-                .help({ text: "PATTERNS are basic regular expressions (default)" }), Basic),
+                .help("PATTERNS are basic regular expressions (default)"), Basic),
             (Cliff.Opt.Spec.flag("perl-regexp")
                 .short("P")
-                .help({ text: "PATTERNS are Perl regular expressions" }), Perl),
+                .help("PATTERNS are Perl regular expressions"), Perl),
         ], Basic)
     |> Cliff.with_opt(Cliff.Opt.Spec.value("regexp")
         .short("e")
-        .help({ text: "use REGEXP for matching", symbol: "REGEXP" }))
+        .help("use REGEXP for matching")
+        .symbol("REGEXP"))
     |> Cliff.with_opt(Cliff.Opt.Spec.value("file")
         .short("f")
-        .help({ text: "take PATTERNS from FILE", symbol: "FILE" }))
+        .help("take PATTERNS from FILE")
+        .symbol("FILE"))
     |> Cliff.with_opt_group(
         [
             (Cliff.Opt.Spec.flag("ignore-case")
                 .short("i")
-                .help({ text: "ignore case distinctions in patterns and data" }), Ignore),
+                .help("ignore case distinctions in patterns and data"), Ignore),
             (Cliff.Opt.Spec.flag("no-ignore-case")
-                .help({ text: "do not ignore case distinctions (default)" }), Respect),
+                .help("do not ignore case distinctions (default)"), Respect),
         ], Respect)
     |> Cliff.with_opt(Cliff.Opt.Spec.flag("invert-match")
         .short("v")
-        .help({ text: "select non-matching lines" }))
+        .help("select non-matching lines"))
     |> Cliff.with_opt_help_section("Output control:")
     |> Cliff.with_opt(Cliff.Opt.Spec.value("max-count")
         .short("m")
         .integer()
-        .help({ text: "stop after NUM lines selected", symbol: "NUM" }))
+        .help("stop after NUM lines selected")
+        .symbol("NUM"))
     |> Cliff.with_opt(Cliff.Opt.Spec.values("include")
-        .help({ text: "search only files that match GLOB (a file pattern)", symbol: "GLOB" }))
+        .help("search only files that match GLOB (a file pattern)")
+        .symbol("GLOB"))
     |> Cliff.with_param(Cliff.Param.Spec.values("args").optionals())
 
 base_expected = {
