@@ -7,13 +7,13 @@ Cliff := {}.{
     }.{
         #parse : Cli(a), List(Str) -> Try(a, _)
         parse = |cli, argv|
-            tokenise(argv, cli.opt_infos, cli.param_infos)?
-                |> cli.assemble
+            tokenise(argv, cli.opt_infos, cli.param_infos)? |> cli.assemble
 
         to_help_str = |self| {
             self.opt_infos
                 .map(|i| i.to_help_str())
                 .prepend(self.usage)
+                .append("\n    --help\t display this help text and exit")
                 |> Str.join_with("\n")
         }
     }
@@ -96,6 +96,7 @@ Cliff := {}.{
         VariadicParamNotLast(Str),
         MissingArguments(List(Str)),
         MandatoryParamAfterOptional(Str),
+        ShowHelp,
         ..errs
     ]
 
@@ -121,6 +122,7 @@ Cliff := {}.{
     get_opt_info = |infos, name|
         match infos.get(name) {
             Ok(info) => Ok(info)
+            _ if name == "help" => Err(ShowHelp)
             _ => Err(UnknownOption(name))
         }
 
@@ -804,4 +806,11 @@ expect {
             Param.Spec.values("files").info,
             Param.Spec.value("expr").info,
         ])
+}
+
+expect {
+    cli = Cliff.succeed(|file|
+                        { file })
+        |> Cliff.with_param(Cliff.Param.Spec.value("file"))
+    Err(ShowHelp) == cli.parse(["--help"])
 }

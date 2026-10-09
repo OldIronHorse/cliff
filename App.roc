@@ -9,10 +9,10 @@ main! = |argv| {
     match argv.map_try(OsStr.to_str_try) {
         Ok(args) =>
             match cli_grep.parse(args) {
-                Ok(cfg) if cfg.show_help => 
-                    cli_grep.to_help_str() |> Stdout.line!()
-                Ok(_) =>
-                    Stdout.line!("running...")
+                Ok(cfg) =>
+                    Stdout.line!("running... ${Str.inspect(args)} ${Str.inspect(cfg)}")
+                Err(ShowHelp) =>
+                    Stdout.line!(cli_grep.to_help_str())
                 Err(e) =>
                     e |> Str.inspect() |> Stdout.line!()
             }
@@ -21,14 +21,13 @@ main! = |argv| {
     }
 }
 
-cli_grep = Cliff.succeed(|show_help| |regexp_type| |pattern_regexp| |pattern_file| |case| |invert_match| |max_count| |include| |pattern_and_files|
-                         { show_help, regexp_type, pattern_regexp, pattern_file, case, invert_match, max_count, include, pattern_and_files })
+cli_grep = Cliff.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |invert_match| |max_count| |include| |pattern_and_files|
+                         { regexp_type, pattern_regexp, pattern_file, case, invert_match, max_count, include, pattern_and_files })
     |> Cliff.with_usage(\\grep [OPTION]... PATTERNS [FILE]...
                         \\Search for PATTERNS in each FILE.
                         \\Example: grep -i 'hello world' menu.h main.c
                         \\
                         )
-    |> Cliff.with_opt(Cliff.Opt.Spec.flag("help").help({text: "display this help text and exit"}))
     |> Cliff.with_opt_group(
         [
             (Cliff.Opt.Spec.flag("extended-regexp").short("E").help({ text: "PATTERNS are extended regular expressions" }), Extended),
@@ -49,7 +48,6 @@ cli_grep = Cliff.succeed(|show_help| |regexp_type| |pattern_regexp| |pattern_fil
     |> Cliff.with_param(Cliff.Param.Spec.values("args").optionals())
 
 base_expected = {
-    show_help: False,
     regexp_type: Basic,
     case: Respect,
     invert_match: False,
