@@ -4,6 +4,7 @@ Cliff := {}.{
         param_infos: List(Cliff.Param.Info),
         assemble: Cliff.Raw -> Try(a, AssembleError),
         usage: Str ?? "",
+        sections : Dict(U64, Str)
     }.{
         #parse : Cli(a), List(Str) -> Try(a, _)
         parse = |cli, argv|
@@ -11,7 +12,11 @@ Cliff := {}.{
 
         to_help_str = |self| {
             self.opt_infos
-                .map(|i| i.to_help_str())
+                .map_with_index(|info, i|
+                    [match self.sections.get(i) {
+                        Ok(heading) => "\n${heading}\n"
+                        _ => ""
+                    }, info.to_help_str()] |> Str.join_with(""))
                 .prepend(self.usage)
                 .append("\n    --help\t display this help text and exit")
                 |> Str.join_with("\n")
@@ -19,7 +24,12 @@ Cliff := {}.{
     }
 
     succeed : a -> Cli(a)
-    succeed = |value| Cli.{ opt_infos: [], param_infos: [], assemble: |_| Ok(value) }
+    succeed = |value| Cli.{
+        opt_infos: [],
+        param_infos: [],
+        assemble: |_| Ok(value),
+        sections: Dict.empty()
+    }
 
     AssembleError : [
         InvalidOptValue(Str, List(Str)),
@@ -30,13 +40,16 @@ Cliff := {}.{
     Optional(a) : [Some(a), None]
 
     with_usage : Cli(a), Str -> Cli(a)
-    with_usage = |cli, usage| {
-       { ..cli, usage }
-    }
+    with_usage = |cli, usage| { ..cli, usage }
+
+    with_opt_help_section : Cli(a), Str -> Cli(a)
+    with_opt_help_section  = |cli, text|
+        { ..cli, sections: cli.sections.insert(cli.opt_infos.len(), text) }
 
     with_opt_group : Cli(a -> b), List((Cliff.Opt.Spec(Bool), a)), a -> Cli(b)
     with_opt_group = |cli, specs, default|
         Cli.{
+            sections: cli.sections,
             usage: cli.usage,
             opt_infos: cli.opt_infos.concat(specs.map(|(spec, _)| spec.info)),
             param_infos: cli.param_infos,
@@ -54,6 +67,7 @@ Cliff := {}.{
     with_opt : Cli(a -> b) , Cliff.Opt.Spec(a) -> Cli(b)
     with_opt = |cli, spec|
         Cli.{
+            sections: cli.sections,
             usage: cli.usage,
             opt_infos: cli.opt_infos.append(spec.info),
             param_infos: cli.param_infos,
@@ -71,6 +85,7 @@ Cliff := {}.{
     with_param : Cli(a -> b) , Cliff.Param.Spec(a) -> Cli(b)
     with_param = |cli, spec|
         Cli.{
+            sections: cli.sections,
             usage: cli.usage,
             opt_infos: cli.opt_infos,
             param_infos: cli.param_infos.append(spec.info),
@@ -200,7 +215,7 @@ Cliff := {}.{
     Help := { text: Str ?? "", symbol: Str ?? "" }
 
     Opt := {}.{
-        Kind : [Flag, Count, Value, Values]
+        Kind : [Flag, Count, Value, Values, Section]
         Info := { kind: Kind, long: Str, short: Str ?? "", help: Help ?? Help.{} }.{
             is_eq = |self, other|
                 self.kind == other.kind

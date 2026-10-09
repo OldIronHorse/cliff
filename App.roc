@@ -26,8 +26,8 @@ cli_grep = Cliff.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |i
     |> Cliff.with_usage(\\grep [OPTION]... PATTERNS [FILE]...
                         \\Search for PATTERNS in each FILE.
                         \\Example: grep -i 'hello world' menu.h main.c
-                        \\
                         )
+    |> Cliff.with_opt_help_section("Pattern selection and interpretation:")
     |> Cliff.with_opt_group(
         [
             (Cliff.Opt.Spec.flag("extended-regexp").short("E").help({ text: "PATTERNS are extended regular expressions" }), Extended),
@@ -43,6 +43,7 @@ cli_grep = Cliff.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |i
             (Cliff.Opt.Spec.flag("no-ignore-case").help({ text: "do not ignore case distinctions (default)" }), Respect),
         ], Respect)
     |> Cliff.with_opt(Cliff.Opt.Spec.flag("invert-match").short("v").help({ text: "select non-matching lines" }))
+    |> Cliff.with_opt_help_section("Output control:")
     |> Cliff.with_opt(Cliff.Opt.Spec.value("max-count").short("m").integer().help({ text: "stop after NUM lines selected", symbol: "NUM" }))
     |> Cliff.with_opt(Cliff.Opt.Spec.values("include").help({ text: "search only files that match GLOB (a file pattern)", symbol: "GLOB" }))
     |> Cliff.with_param(Cliff.Param.Spec.values("args").optionals())
