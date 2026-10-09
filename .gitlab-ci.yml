@@ -31,9 +31,9 @@ build-job:       # This job runs in the build stage, which runs first.
 unit-test-job:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   before_script:
-    - curl -fL -O "https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-09-258ab27/roc_nightly-linux_x86_64-2026-10-09-258ab27.tar.gz"
-    - tar zxf roc_nightly-linux_x86_64-2026-10-09-258ab27.tar.gz
-    - mv roc_nightly-linux_x86_64-2026-10-09-258ab27/roc .
+    - curl -fL -O https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-06-c34079d/roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz
+    - tar zxf roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz
+    - mv roc_nightly-linux_x86_64-2026-10-06-c34079d/roc .
   script:
     - ./roc test App.roc
 
