@@ -28,8 +28,8 @@ Cliff := {}.{
                     |> Str.join_with(""))
                 .prepend(self.usage)
                 .append([
-                    "\n    --help", 
-                    " ".repeat(max_opt_len - 10 + 2),
+                    "\n${help_option}",
+                    " ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2),
                     "display this help text and exit"
                 ] |> Str.join_with(""))
                 |> Str.join_with("\n")
@@ -292,7 +292,7 @@ Cliff := {}.{
     }
     Param := {}.{
         Kind : [Value, Values]
-        Info := { kind: Kind, name: Str, mandatory: Bool ?? Bool.True,  help: Str ?? "" }.{
+        Info := { kind: Kind, name: Str, mandatory: Bool ?? Bool.True }.{
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.name == other.name
@@ -326,12 +326,11 @@ Cliff := {}.{
                 info: spec.info,
                 convert: with_default(spec.convert, def)
             }
-
-            help : Spec, Str -> Spec
-            help = |spec, s| { ..spec, info: { ..spec.info, help: s }}
         }
     }
 }
+
+help_option = "    --help"
 
 to_integer : (List(Str) -> Try(Str, [TypeMismatch, NotFound]))
    -> (List(Str) -> Try(I64, [TypeMismatch, NotFound]))
@@ -672,9 +671,6 @@ expect {
 expect
     Cliff.Opt.Info.{ kind: Count, short: "v", long: "verbosity", help: "verbosity level" }
         == Opt.Spec.count("verbosity").short("v").help("verbosity level").info
-expect
-    Cliff.Param.Info.{ kind: Value, name: "file", help: "the file to load" }
-        == Param.Spec.value("file").help("the file to load").info
 
 expect Dict.from_list([("verbosity", [""])])
     == Cliff.tokenise(["--verbosity"], [Opt.Spec.count("verbosity").short("v").info], [])?.opts
