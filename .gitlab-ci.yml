@@ -31,4 +31,5 @@ deploy-job:      # This job runs in the deploy stage.
     - tags
   script:
     - ./roc bundle App.roc
-    - curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/*.zst "${PACKAGE_REGISTRY_URL}/"
+    - |
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN" --upload-file bin/*.zst "${PACKAGE_REGISTRY_URL}/"
