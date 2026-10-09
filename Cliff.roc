@@ -171,31 +171,32 @@ Cliff := {}.{
                 else
                     Ok(d.insert(k, v)))?
 
-        do = |args, p_infos, raw|
+        do = |args, p_infos, raw, consider_opts|
             match args {
                 [] =>
                     match p_infos.keep_if(|i| i.mandatory) {
                         [] => Ok(raw)
                         remaining => Err(MissingArguments(remaining.map(|p| p.name)))
                     }
-                [opt, .. as rest] if opt.starts_with("--") =>
+                ["--", .. as rest] => do(rest, p_infos, raw, False)
+                [opt, .. as rest] if consider_opts and opt.starts_with("--") =>
                     match opt.drop_prefix("--").split_first("=") {
                         Ok({ before, after }) => {
-                            do(rest, p_infos, add_opt(raw, get_opt_info(opt_infos_by_name, before)?, Some(after))?)
+                            do(rest, p_infos, add_opt(raw, get_opt_info(opt_infos_by_name, before)?, Some(after))?, consider_opts)
                         }
                         Err(NotFound) => {
                             match get_opt_info(opt_infos_by_name, opt.drop_prefix("--"))? {
                                 i if i.kind == Value or i.kind == Values =>
                                     match rest {
                                         [value, .. as rest1] =>
-                                            do(rest1, p_infos, add_opt(raw, i, Some(value))?)
+                                            do(rest1, p_infos, add_opt(raw, i, Some(value))?, consider_opts)
                                         _ => Err(MissingValue(i.long))
                                     }
-                                i => do(rest, p_infos, add_opt(raw, i, None)?)
+                                i => do(rest, p_infos, add_opt(raw, i, None)?, consider_opts)
                             }
                         }
                     }
-                [opt, .. as rest] if opt.starts_with("-") and opt.count_utf8_bytes() > 1 =>
+                [opt, .. as rest] if consider_opts and opt.starts_with("-") and opt.count_utf8_bytes() > 1 =>
                     match opt.drop_prefix("-") {
                         #tags if tags.count_utf8_bytes() == 1 and [Value, Values].contains(get_opt_info(opt_infos_by_name, tags)?.kind) =>
                         #match (rest, get_opt_info(opt_infos_by_name, tags)?) {
@@ -210,19 +211,19 @@ Cliff := {}.{
                                         Ok(s) =>
                                             add_opt(r, get_opt_info(opt_infos_by_name, s)?, None)
                                         _ => Err(UnexpectedValue(opt))
-                                    })?)
+                                    })?, consider_opts)
                     }
                 [param, .. as rest] =>
                     match p_infos {
                         [pi] if pi.kind == Values =>
-                            do(rest, [{ ..pi, mandatory: Bool.False }], add_param(raw, pi, param))
-                        [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param))
+                            do(rest, [{ ..pi, mandatory: Bool.False }], add_param(raw, pi, param), consider_opts)
+                        [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param), consider_opts)
                         [pi, ..] => Err(VariadicParamNotLast(pi.name))
                         [] => Err(TrailingParameters(args))
                     }
             }
 
-        do(argv, param_infos, { opts: Dict.empty(), params: Dict.empty() })
+        do(argv, param_infos, { opts: Dict.empty(), params: Dict.empty() }, True)
     }
 
     Opt := {}.{
@@ -882,6 +883,11 @@ expect {
     cli = Cliff.succeed(|invert| |file| { invert, file })
         |> Cliff.with_opt(Cliff.Opt.Spec.flag("invert").short("v"))
         |> Cliff.with_param(Cliff.Param.Spec.value("file"))
-    dbg cli.parse(["-"])
     { invert: False, file: "-" } == cli.parse(["-"])?
+}
+expect {
+    cli = Cliff.succeed(|invert| |files| { invert, files })
+        |> Cliff.with_opt(Cliff.Opt.Spec.flag("invert").short("v"))
+        |> Cliff.with_param(Cliff.Param.Spec.values("files"))
+    { invert: False, files: ["-v", "f.txt"] } == cli.parse(["--", "-v", "f.txt"])?
 }
