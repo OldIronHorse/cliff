@@ -22,7 +22,7 @@ stages:          # List of stages for jobs, and their order of execution
   - deploy
 
 .roc: &roc_template
-  image: alpine:3.24
+  image: ubuntu:26.04
   before_script:
     - curl -fL -O https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-06-c34079d/roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz
     - tar zxf roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz
