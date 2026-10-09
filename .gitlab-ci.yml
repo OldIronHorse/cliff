@@ -31,11 +31,11 @@ build-job:       # This job runs in the build stage, which runs first.
 unit-test-job:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   before_script:
-    - export ROC_CONTINUE_IF_STALE=y
-    - export ROC_ADD_TO_PATH=y
-    - curl --proto '=https' --tlsv1.2 -sSf https://roc-lang.org/install_roc.sh | sh
+    - curl -fL -O "https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-09-258ab27/roc_nightly-linux_x86_64-2026-10-09-258ab27.tar.gz"
+    - tar zxf roc_nightly-linux_x86_64-2026-10-09-258ab27.tar.gz
+    - mv roc_nightly-linux_x86_64-2026-10-09-258ab27/roc .
   script:
-    - roc test App.roc
+    - .roc test App.roc
 
 lint-test-job:   # This job also runs in the test stage.
   stage: test    # It can run at the same time as unit-test-job (in parallel).
