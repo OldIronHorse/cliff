@@ -11,14 +11,27 @@ Cliff := {}.{
             tokenise(argv, cli.opt_infos, cli.param_infos)? |> cli.assemble
 
         to_help_str = |self| {
-            self.opt_infos
-                .map_with_index(|info, i|
-                    [match self.sections.get(i) {
-                        Ok(heading) => "\n${heading}\n"
-                        _ => ""
-                    }, info.to_help_str()] |> Str.join_with(""))
+            opt_descs = self.opt_infos.map(|i| i.to_help_str())
+            max_opt_len = opt_descs
+                .map(|(opts, _)| opts.count_utf8_bytes())
+                .max()
+                .ok_or(0).max(10)
+            opt_descs
+                .map_with_index(|(opts, desc), i|
+                    [
+                        match self.sections.get(i) {
+                            Ok(heading) => "\n${heading}\n"
+                            _ => ""
+                        },
+                        opts, " ".repeat(max_opt_len + 2 - opts.count_utf8_bytes()), desc
+                    ]
+                    |> Str.join_with(""))
                 .prepend(self.usage)
-                .append("\n    --help\t display this help text and exit")
+                .append([
+                    "\n    --help", 
+                    " ".repeat(max_opt_len - 10 + 2),
+                    "display this help text and exit"
+                ] |> Str.join_with(""))
                 |> Str.join_with("\n")
         }
     }
@@ -231,7 +244,7 @@ Cliff := {}.{
                     Value | Values if self.symbol.is_empty().not() => "--${self.long}=${self.symbol}"
                     _ => "--${self.long}"
                 }
-                "${short}${long}\t${self.help}"
+                ("${short}${long}", self.help)
             }
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
@@ -853,15 +866,16 @@ expect {
             .help("stop after NUM lines selected")
             .symbol("NUM"))
         |> Cliff.with_param(Cliff.Param.Spec.value("file"))
+    dbg cli.to_help_str()
     cli.to_help_str() == \\app [OPTION]... [FILE]...
                          \\description
                          \\example
                          \\
                          \\A logical group of options:
-                         \\-E, --extended-regexp\tPATTERNS are extended regular expressions
-                         \\-f, --file=FILE\ttake PATTERNS from FILE
-                         \\    --max-count=NUM\tstop after NUM lines selected
+                         \\-E, --extended-regexp  PATTERNS are extended regular expressions
+                         \\-f, --file=FILE        take PATTERNS from FILE
+                         \\    --max-count=NUM    stop after NUM lines selected
                          \\
-                         \\    --help	 display this help text and exit
+                         \\    --help             display this help text and exit
 }
 
