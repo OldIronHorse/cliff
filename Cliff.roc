@@ -4,7 +4,8 @@ Cliff := {}.{
         param_infos: List(Cliff.Param.Info),
         assemble: Cliff.Raw -> Try(a, AssembleError),
         usage: Str ?? "",
-        sections : Dict(U64, Str)
+        sections : Dict(U64, Str),
+        coda: Str ?? "",
     }.{
         #parse : Cli(a), List(Str) -> Try(a, _)
         parse = |cli, argv|
@@ -32,6 +33,7 @@ Cliff := {}.{
                     " ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2),
                     "display this help text and exit"
                 ] |> Str.join_with(""))
+                .append("\n${self.coda}")
                 |> Str.join_with("\n")
         }
     }
@@ -55,6 +57,9 @@ Cliff := {}.{
     with_usage : Cli(a), Str -> Cli(a)
     with_usage = |cli, usage| { ..cli, usage }
 
+    with_coda : Cli(a), Str -> Cli(a)
+    with_coda = |cli, coda| { ..cli, coda }
+
     with_opt_help_section : Cli(a), Str -> Cli(a)
     with_opt_help_section  = |cli, text|
         { ..cli, sections: cli.sections.insert(cli.opt_infos.len(), text) }
@@ -64,6 +69,7 @@ Cliff := {}.{
         Cli.{
             sections: cli.sections,
             usage: cli.usage,
+            coda: cli.coda,
             opt_infos: cli.opt_infos.concat(specs.map(|(spec, _)| spec.info)),
             param_infos: cli.param_infos,
             assemble: |raw| {
@@ -82,6 +88,7 @@ Cliff := {}.{
         Cli.{
             sections: cli.sections,
             usage: cli.usage,
+            coda: cli.coda,
             opt_infos: cli.opt_infos.append(spec.info),
             param_infos: cli.param_infos,
             assemble: |raw| {
@@ -100,6 +107,7 @@ Cliff := {}.{
         Cli.{
             sections: cli.sections,
             usage: cli.usage,
+            coda: cli.coda,
             opt_infos: cli.opt_infos,
             param_infos: cli.param_infos.append(spec.info),
             assemble: |raw| {
@@ -850,6 +858,8 @@ expect {
                             \\description
                             \\example
                             )
+        |> Cliff.with_coda(\\Explainations and contact details here
+                            )
         |> Cliff.with_opt_help_section("A logical group of options:")
         |> Cliff.with_opt(Cliff.Opt.Spec.flag("extended-regexp")
             .short("E")
@@ -873,6 +883,8 @@ expect {
                          \\    --max-count=NUM    stop after NUM lines selected
                          \\
                          \\    --help             display this help text and exit
+                         \\
+                         \\Explainations and contact details here
 }
 
 expect {
