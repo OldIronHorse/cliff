@@ -21,32 +21,27 @@ stages:          # List of stages for jobs, and their order of execution
   - build
   - deploy
 
-build-job:       # This job runs in the build stage, which runs first.
-  stage: build
-  before_script:
-    - curl --proto '=https' --tlsv1.2 -sSf https://roc-lang.org/install_roc.sh | sh
-  script:
-    - roc build App
-
-unit-test-job:   # This job runs in the test stage.
-  stage: test    # It only starts when the job in the build stage completes successfully.
+.roc: &roc_template
+  image: alpine:3.24
   before_script:
     - curl -fL -O https://github.com/roc-lang/nightlies/releases/download/nightly-2026-10-06-c34079d/roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz
     - tar zxf roc_nightly-linux_x86_64-2026-10-06-c34079d.tar.gz
     - mv roc_nightly-linux_x86_64-2026-10-06-c34079d/roc .
+
+unit-test-job:   # This job runs in the test stage.
+  <<: *roc_template
+  stage: test    # It only starts when the job in the build stage completes successfully.
   script:
     - ./roc test App.roc
 
 lint-test-job:   # This job also runs in the test stage.
+  <<: *roc_template
   stage: test    # It can run at the same time as unit-test-job (in parallel).
-  before_script:
-    - curl --proto '=https' --tlsv1.2 -sSf https://roc-lang.org/install_roc.sh | sh
   script:
-    - roc check App.roc
+    - ./roc check App.roc
 
 deploy-job:      # This job runs in the deploy stage.
+  <<: *roc_template
   stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
-  environment: production
   script:
-    - echo "Deploying application..."
-    - echo "Application successfully deployed."
+    - ./roc bundle App.roc
