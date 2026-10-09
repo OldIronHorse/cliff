@@ -219,6 +219,8 @@ Cliff := {}.{
                 self.kind == other.kind
                     and self.short == other.short
                     and self.long == other.long
+                    and self.help == other.help
+                    and self.symbol == other.symbol
 
             to_help_str = |self| {
                 short = match self.short {
@@ -229,7 +231,7 @@ Cliff := {}.{
                     Value | Values if self.symbol.is_empty().not() => "--${self.long}=${self.symbol}"
                     _ => "--${self.long}"
                 }
-                "${short}${long}\t ${self.help}"
+                "${short}${long}\t${self.help}"
             }
         }
         Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
@@ -830,3 +832,36 @@ expect {
         |> Cliff.with_param(Cliff.Param.Spec.value("file"))
     Err(ShowHelp) == cli.parse(["--help"])
 }
+
+expect {
+    cli = Cliff.succeed(|regexp_type| |patterns_file| |max_count| |files|
+                        { regexp_type, patterns_file, max_count, files })
+        |> Cliff.with_usage(\\app [OPTION]... [FILE]...
+                            \\description
+                            \\example
+                            )
+        |> Cliff.with_opt_help_section("A logical group of options:")
+        |> Cliff.with_opt(Cliff.Opt.Spec.flag("extended-regexp")
+            .short("E")
+            .help("PATTERNS are extended regular expressions"))
+        |> Cliff.with_opt(Cliff.Opt.Spec.value("file")
+            .short("f")
+            .help("take PATTERNS from FILE")
+            .symbol("FILE"))
+        |> Cliff.with_opt(Cliff.Opt.Spec.value("max-count")
+            .integer()
+            .help("stop after NUM lines selected")
+            .symbol("NUM"))
+        |> Cliff.with_param(Cliff.Param.Spec.value("file"))
+    cli.to_help_str() == \\app [OPTION]... [FILE]...
+                         \\description
+                         \\example
+                         \\
+                         \\A logical group of options:
+                         \\-E, --extended-regexp\tPATTERNS are extended regular expressions
+                         \\-f, --file=FILE\ttake PATTERNS from FILE
+                         \\    --max-count=NUM\tstop after NUM lines selected
+                         \\
+                         \\    --help	 display this help text and exit
+}
+
