@@ -55,8 +55,8 @@ jobs:
           bump_entrypoint: main.roc
 
       - run:
-          mkdir dist
-          roc bundle Cliff.roc --output-dir dist
+          - mkdir dist
+          - roc bundle Cliff.roc --output-dir dist
 
       - id: bundles
         uses: roc-lang/release-package/actions/prepare-bundles@main
