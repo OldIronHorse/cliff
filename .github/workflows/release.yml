@@ -27,12 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: roc-lang/setup-roc@<setup-roc-ref>
+      - uses: roc-lang/setup-roc@v0.3.0
         with:
           version: nightly-new-compiler
 
       - id: validate
-        uses: roc-lang/release-package/actions/validate-release@<release-package-ref>
+        uses: roc-lang/release-package/actions/validate-release@main
         with:
           release_version: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '' }}
           dry_run: ${{ github.event_name != 'workflow_dispatch' }}
@@ -46,7 +46,7 @@ jobs:
         with:
           github_token: ${{ github.token }}
 
-      - uses: roc-lang/release-package/actions/run-bump-check@<release-package-ref>
+      - uses: roc-lang/release-package/actions/run-bump-check@main
         with:
           release_version: ${{ steps.validate.outputs.release_version }}
           dry_run: ${{ github.event_name != 'workflow_dispatch' }}
@@ -57,7 +57,7 @@ jobs:
       - run: ./scripts/bundle.sh --output-dir dist
 
       - id: bundles
-        uses: roc-lang/release-package/actions/prepare-bundles@<release-package-ref>
+        uses: roc-lang/release-package/actions/prepare-bundles@main
         with:
           bundle_glob: dist/*.tar.zst
           test_os_json: '["ubuntu-latest"]'
@@ -97,7 +97,7 @@ jobs:
           name: release-bundles
           path: .release/test-bundles
 
-      - uses: roc-lang/release-package/actions/test-bundle@<release-package-ref>
+      - uses: roc-lang/release-package/actions/test-bundle@main
         with:
           test_bundle_command: python3 ci/test_bundle_examples.py --bundle-path
           bundle_path: .release/test-bundles/${{ matrix.artifact_file }}
@@ -125,12 +125,12 @@ jobs:
           name: release-metadata
           path: .release
 
-      - uses: roc-lang/release-package/actions/make-release-notes@<release-package-ref>
+      - uses: roc-lang/release-package/actions/make-release-notes@main
         with:
           release_version: ${{ needs.build.outputs.release_version }}
           github_token: ${{ github.token }}
 
-      - uses: roc-lang/release-package/actions/publish-release@<release-package-ref>
+      - uses: roc-lang/release-package/actions/publish-release@main
         with:
           release_version: ${{ needs.build.outputs.release_version }}
           github_token: ${{ github.token }}
