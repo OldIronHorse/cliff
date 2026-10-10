@@ -54,7 +54,7 @@ jobs:
           bump_check: warn #require
           bump_entrypoint: main.roc
 
-      - run: mkdir dist && roc bundle Cliff.roc --output-dir dist
+      - run: mkdir dist && roc bundle main.roc --output-dir dist
 
       - id: bundles
         uses: roc-lang/release-package/actions/prepare-bundles@main
