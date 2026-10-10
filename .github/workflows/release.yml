@@ -42,7 +42,7 @@ jobs:
 
       - id: previous
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: roc-lang/release-package/actions/resolve-previous-release@<release-package-ref>
+        uses: roc-lang/release-package/actions/resolve-previous-release@main
         with:
           github_token: ${{ github.token }}
 
@@ -88,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: roc-lang/setup-roc@<setup-roc-ref>
+      - uses: roc-lang/setup-roc@main
         with:
           version: nightly-new-compiler
 
