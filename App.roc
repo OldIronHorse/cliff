@@ -1,8 +1,12 @@
-app [main!] { pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.24.0/AEjfyaMFFbh8FJrkkHJy68riVNPr3Qp6c6PawWQjBwMH.tar.zst" }
+app [main!] {
+    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.24.0/AEjfyaMFFbh8FJrkkHJy68riVNPr3Qp6c6PawWQjBwMH.tar.zst",
+    cliff: "https://github.com/OldIronHorse/cliff/releases/download/0.0.7/HzmiLM5GNihkmVg4KfqmJesivtaPWY4xnyVuQrURE4Fj.tar.zst"
+}
 
 import pf.OsStr
 import pf.Stdout
-import Cliff
+import cliff.Cliff
+#import Cliff
 
 main! : List(OsStr) => Try({}, _)
 main! = |argv| {
