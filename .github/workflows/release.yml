@@ -38,7 +38,7 @@ jobs:
           dry_run: ${{ github.event_name != 'workflow_dispatch' }}
           github_token: ${{ github.token }}
 
-      - run: ./ci/all_tests.sh
+      - run: roc test Cliff.roc
 
       - id: previous
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -54,7 +54,7 @@ jobs:
           bump_check: warn #require
           bump_entrypoint: main.roc
 
-      - run: ./scripts/bundle.sh --output-dir dist
+      - run: roc bundle Cliff.roc --output-dir dist
 
       - id: bundles
         uses: roc-lang/release-package/actions/prepare-bundles@main
