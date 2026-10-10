@@ -1,2 +1,2 @@
 #! /usr/bin/sh
-roc test App.roc
+roc test Cliff.roc
