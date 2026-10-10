@@ -33,4 +33,4 @@ jobs:
       - name: Check the Roc version
         run: roc --version
       - name: Test Roc code
-        run: roc test Cliff.roc
+        run: roc test TestLocal.roc
