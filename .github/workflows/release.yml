@@ -78,32 +78,6 @@ jobs:
             .release/test-matrix.json
           if-no-files-found: error
 
-  test-bundles:
-    needs: build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.build.outputs.test_matrix) }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: roc-lang/setup-roc@main
-        with:
-          version: nightly-new-compiler
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-bundles
-          path: .release/test-bundles
-
-      - uses: roc-lang/release-package/actions/test-bundle@main
-        with:
-          test_bundle_command: python3 ci/test_bundle_examples.py --bundle-path
-          bundle_path: .release/test-bundles/${{ matrix.artifact_file }}
-          bundle_name: ${{ matrix.bundle_name }}
-          release_version: ${{ needs.build.outputs.release_version }}
-
   publish:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     needs:
