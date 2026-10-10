@@ -25,7 +25,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v7
       - name: Install Roc
-        uses: hasnep/setup-roc@latest
+        uses: roc-lang/setup-roc@v0.3.0
         with:
           version: nightly-new-compiler
           #nightly-tag: pin version here:w
