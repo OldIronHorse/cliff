@@ -1,13 +1,13 @@
-import Cliff
+import Cli
 
 Grep := {}.{
-    cli = Cliff.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |invert_match| |max_count| |include| |pattern_and_files|
+    cli = Cli.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |invert_match| |max_count| |include| |pattern_and_files|
                              { regexp_type, pattern_regexp, pattern_file, case, invert_match, max_count, include, pattern_and_files })
-        |> Cliff.with_usage(\\grep [OPTION]... PATTERNS [FILE]...
+        |> Cli.with_usage(\\grep [OPTION]... PATTERNS [FILE]...
                             \\Search for PATTERNS in each FILE.
                             \\Example: grep -i 'hello world' menu.h main.c
                             )
-        |> Cliff.with_coda(\\When FILE is '-', read standard input.  With no FILE, read '.' if
+        |> Cli.with_coda(\\When FILE is '-', read standard input.  With no FILE, read '.' if
                            \\recursive, '-' otherwise.  With fewer than two FILEs, assume -h.
                            \\Exit status is 0 if any line is selected, 1 otherwise;
                            \\if any error occurs and -q is not given, the exit status is 2.
@@ -16,51 +16,51 @@ Grep := {}.{
                            \\GNU grep home page: <https://www.gnu.org/software/grep/>
                            \\General help using GNU software: <https://www.gnu.org/gethelp/>
                            )
-        |> Cliff.with_opt_help_section("Pattern selection and interpretation:")
-        |> Cliff.with_opt_group(
+        |> Cli.with_opt_help_section("Pattern selection and interpretation:")
+        |> Cli.with_opt_group(
             [
-                (Cliff.Opt.Spec.flag("extended-regexp")
+                (Cli.Opt.Spec.flag("extended-regexp")
                     .short("E")
                     .help("PATTERNS are extended regular expressions"), Extended),
-                (Cliff.Opt.Spec.flag("fixed-strings")
+                (Cli.Opt.Spec.flag("fixed-strings")
                     .short("F")
                     .help("PATTERNS are strings"), Fixed),
-                (Cliff.Opt.Spec.flag("basic-regexp")
+                (Cli.Opt.Spec.flag("basic-regexp")
                     .short("G")
                     .help("PATTERNS are basic regular expressions (default)"), Basic),
-                (Cliff.Opt.Spec.flag("perl-regexp")
+                (Cli.Opt.Spec.flag("perl-regexp")
                     .short("P")
                     .help("PATTERNS are Perl regular expressions"), Perl),
             ], Basic)
-        |> Cliff.with_opt(Cliff.Opt.Spec.value("regexp")
+        |> Cli.with_opt(Cli.Opt.Spec.value("regexp")
             .short("e")
             .help("use REGEXP for matching")
             .symbol("REGEXP"))
-        |> Cliff.with_opt(Cliff.Opt.Spec.value("file")
+        |> Cli.with_opt(Cli.Opt.Spec.value("file")
             .short("f")
             .help("take PATTERNS from FILE")
             .symbol("FILE"))
-        |> Cliff.with_opt_group(
+        |> Cli.with_opt_group(
             [
-                (Cliff.Opt.Spec.flag("ignore-case")
+                (Cli.Opt.Spec.flag("ignore-case")
                     .short("i")
                     .help("ignore case distinctions in patterns and data"), Ignore),
-                (Cliff.Opt.Spec.flag("no-ignore-case")
+                (Cli.Opt.Spec.flag("no-ignore-case")
                     .help("do not ignore case distinctions (default)"), Respect),
             ], Respect)
-        |> Cliff.with_opt(Cliff.Opt.Spec.flag("invert-match")
+        |> Cli.with_opt(Cli.Opt.Spec.flag("invert-match")
             .short("v")
             .help("select non-matching lines"))
-        |> Cliff.with_opt_help_section("Output control:")
-        |> Cliff.with_opt(Cliff.Opt.Spec.value("max-count")
+        |> Cli.with_opt_help_section("Output control:")
+        |> Cli.with_opt(Cli.Opt.Spec.value("max-count")
             .short("m")
             .integer()
             .help("stop after NUM lines selected")
             .symbol("NUM"))
-        |> Cliff.with_opt(Cliff.Opt.Spec.values("include")
+        |> Cli.with_opt(Cli.Opt.Spec.values("include")
             .help("search only files that match GLOB (a file pattern)")
             .symbol("GLOB"))
-        |> Cliff.with_param(Cliff.Param.Spec.values("args").optionals())
+        |> Cli.with_param(Cli.Param.Spec.values("args").optionals())
 }
 
 base_expected = {
