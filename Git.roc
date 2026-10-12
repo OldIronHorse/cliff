@@ -35,3 +35,5 @@ expect Err(MissingSubcommand) == Git.cli.parse([])
 expect Err(UnknownSubcommand("status")) == Git.cli.parse(["status"])
 expect Err(UnknownOption("no-pager")) == Git.cli.parse(["commit", "--no-pager"])
 expect Err(MissingValue("message")) == Git.cli.parse(["commit", "--message"])
+
+# TODO: subcommand help text

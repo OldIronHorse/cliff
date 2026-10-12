@@ -6,10 +6,15 @@ Cli(a) := {
     sections : Dict(U64, Str),
     coda: Str,
 }.{
-    #parse : Cli(a), List(Str) -> Try(a, _)
+    parse : Cli(a), List(Str) -> Try(a, _)
     parse = |cli, argv|
-        tokenise(argv, cli.opt_infos, cli.param_infos)? |> cli.assemble
+        match tokenise(argv, cli.opt_infos, cli.param_infos) {
+            Ok(ts) => (cli.assemble)(ts)
+            Err(RenderHelp) => Err(ShowHelp(cli.to_help_str()))
+            Err(e) => Err(e)
+        }
 
+    to_help_str : Cli(a) -> Str
     to_help_str = |self| {
         opt_descs = self.opt_infos.map(|i| i.to_help_str())
         max_opt_len = opt_descs
@@ -159,7 +164,8 @@ Cli(a) := {
         VariadicParamNotLast(Str),
         MissingArguments(List(Str)),
         MandatoryParamAfterOptional(Str),
-        ShowHelp,
+        ShowHelp(Str),
+        RenderHelp,
         InvalidOptValue(Str, List(Str)),
         InvalidParamValue(Str, List(Str)),
         ConflictingOpts(List(Str)),
@@ -296,7 +302,7 @@ get_opt_info : Dict(Str, Cli.Opt.Info), Str -> Try(Cli.Opt.Info, _)
 get_opt_info = |infos, name|
     match infos.get(name) {
         Ok(info) => Ok(info)
-        _ if name == "help" => Err(ShowHelp)
+        _ if name == "help" => Err(RenderHelp)
         _ => Err(UnknownOption(name))
     }
 
@@ -903,7 +909,7 @@ expect {
     cli = Cli.succeed(|file|
                         { file })
         |> Cli.with_param(Cli.Param.Spec.value("file"))
-    Err(ShowHelp) == cli.parse(["--help"])
+    Err(ShowHelp("\n\n    --help  display this help text and exit\n\n")) == cli.parse(["--help"])
 }
 
 expect {
