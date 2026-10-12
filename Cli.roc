@@ -1,10 +1,10 @@
 Cli(a) := {
     opt_infos: List(Cli.Opt.Info),
     param_infos: List(Cli.Param.Info),
-    assemble: Cli.Raw -> Try(a, AssembleError),
-    usage: Str ?? "",
+    assemble: Cli.Raw -> Try(a, CliError),
+    usage: Str,
     sections : Dict(U64, Str),
-    coda: Str ?? "",
+    coda: Str,
 }.{
     #parse : Cli(a), List(Str) -> Try(a, _)
     parse = |cli, argv|
@@ -41,16 +41,10 @@ Cli(a) := {
         opt_infos: [],
         param_infos: [],
         assemble: |_| Ok(value),
-        sections: Dict.empty()
+        sections: Dict.empty(),
+        usage: "",
+        coda: "",
     }
-
-    AssembleError : [
-        InvalidOptValue(Str, List(Str)),
-        InvalidParamValue(Str, List(Str)),
-        ConflictingOpts(List(Str)),
-    ]
-
-    Optional(a) : [Some(a), None]
 
     with_usage : Cli(a), Str -> Cli(a)
     with_usage = |cli, usage| { ..cli, usage }
@@ -78,7 +72,7 @@ Cli(a) := {
                         [(_, v)] => Ok(f(v))
                         vs => Err(ConflictingOpts(vs.map(|(s, _)| s.info.long)))
                 }
-            }
+            },
         }
 
     with_opt : Cli(a -> b) , Cli.Opt.Spec(a) -> Cli(b)
@@ -97,7 +91,7 @@ Cli(a) := {
                     Err(NotFound) => { crash "unreachable #1" }
                     Err(TypeMismatch) => Err(InvalidOptValue(spec.info.long, vs))
                 }
-            }
+            },
         }
 
     with_param : Cli(a -> b) , Cli.Param.Spec(a) -> Cli(b)
@@ -116,12 +110,47 @@ Cli(a) := {
                     Err(NotFound) => { crash "unreachable #2" }
                     Err(TypeMismatch) => Err(InvalidParamValue(spec.info.name, vs))
                 }
-            }
+            },
         }
+
+    with_subcommands : Cli(a -> b), List((Str, Cli(a))) -> Cli(b)
+    with_subcommands = |cli, sub_cmds|
+        Cli.{
+            sections: cli.sections,
+            usage: cli.usage,
+            coda: cli.coda,
+            opt_infos: cli.opt_infos,
+            param_infos: cli.param_infos.append(Cli.Param.Info.{ kind: Command, name: "" }),
+            assemble: |raw| {
+                f = (cli.assemble)(raw)?
+                match raw.params.to_list() {
+                    [(name, argv)] =>
+                        match sub_cmds.find_first(|(cmd_name, _)| name == cmd_name) {
+                            Ok((_, sub_cli)) => Ok(f(sub_cli.parse(argv)?))
+                            Err(NotFound) => Err(UnknownSubcommand(name))
+                        }
+                    [] => Err(MissingSubcommand)
+                    _ => Err(TrailingParameters(raw.params.keys()))
+                }
+            },
+        }
+
+    map : Cli(a), (a -> b) -> Cli(b)
+    map = |cli, fn|
+        Cli.{
+            sections: cli.sections,
+            usage: cli.usage,
+            coda: cli.coda,
+            opt_infos: cli.opt_infos,
+            param_infos: cli.param_infos,
+            assemble: |raw| Ok(fn((cli.assemble)(raw)?)),
+            }
+
+    Optional(a) : [Some(a), None]
 
     Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
 
-    TokenError(errs) : [
+    CliError : [
         UnknownOption(Str),
         MissingValue(Str),
         UnexpectedValue(Str),
@@ -131,7 +160,11 @@ Cli(a) := {
         MissingArguments(List(Str)),
         MandatoryParamAfterOptional(Str),
         ShowHelp,
-        ..errs
+        InvalidOptValue(Str, List(Str)),
+        InvalidParamValue(Str, List(Str)),
+        ConflictingOpts(List(Str)),
+        UnknownSubcommand(Str),
+        MissingSubcommand,
     ]
 
     Opt := {}.{
@@ -198,8 +231,9 @@ Cli(a) := {
             symbol = |spec, symbol| { ..spec, info: { ..spec.info, symbol } }
         }
     }
+
     Param := {}.{
-        Kind : [Value, Values]
+        Kind : [Value, Values, Command]
         Info := { kind: Kind, name: Str, mandatory: Bool ?? Bool.True }.{
             is_eq = |self, other|
                 self.kind == other.kind
@@ -253,7 +287,7 @@ add_param : Raw, Cli.Param.Info, Str -> Raw
 add_param = |raw, info, value|
     match info.kind {
         Value => { ..raw, params: raw.params.insert(info.name, [value]) }
-        Values => { ..raw, params: upsert(raw.params, info.name, value) }
+        Values | Command => { ..raw, params: upsert(raw.params, info.name, value) }
     }
 
 get_opt_info : Dict(Str, Cli.Opt.Info), Str -> Try(Cli.Opt.Info, _)
@@ -264,7 +298,7 @@ get_opt_info = |infos, name|
         _ => Err(UnknownOption(name))
     }
 
-tokenise : List(Str), List(Cli.Opt.Info), List(Cli.Param.Info) -> Try(Raw, TokenError)
+tokenise : List(Str), List(Cli.Opt.Info), List(Cli.Param.Info) -> Try(Raw, _)
 tokenise = |argv, opt_infos, param_infos| {
     _ = param_infos.fold_try(Bool.False, |seen_optional, p|
         if p.mandatory and seen_optional
@@ -326,8 +360,17 @@ tokenise = |argv, opt_infos, param_infos| {
             [param, .. as rest] =>
                 match p_infos {
                     [pi] if pi.kind == Values =>
-                        do(rest, [{ ..pi, mandatory: Bool.False }], add_param(raw, pi, param), consider_opts)
-                    [pi, .. as rpi] if pi.kind == Value => do(rest, rpi, add_param(raw, pi, param), consider_opts)
+                        do(rest,
+                            [{ ..pi, mandatory: Bool.False }],
+                            { ..raw, params: upsert(raw.params, pi.name, param) },
+                            consider_opts)
+                    [pi] if pi.kind == Command =>
+                        Ok({ ..raw, params: raw.params.insert(param, rest) })
+                    [pi, .. as rpi] if pi.kind == Value =>
+                        do(rest,
+                            rpi,
+                            { ..raw, params: raw.params.insert(pi.name, [param]) },
+                            consider_opts)
                     [pi, ..] => Err(VariadicParamNotLast(pi.name))
                     [] => Err(TrailingParameters(args))
                 }

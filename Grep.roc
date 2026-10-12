@@ -3,11 +3,11 @@ import Cli
 Grep := {}.{
     cli = Cli.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |invert_match| |max_count| |include| |pattern_and_files|
                              { regexp_type, pattern_regexp, pattern_file, case, invert_match, max_count, include, pattern_and_files })
-        |> Cli.with_usage(\\grep [OPTION]... PATTERNS [FILE]...
+        .with_usage(\\grep [OPTION]... PATTERNS [FILE]...
                             \\Search for PATTERNS in each FILE.
                             \\Example: grep -i 'hello world' menu.h main.c
                             )
-        |> Cli.with_coda(\\When FILE is '-', read standard input.  With no FILE, read '.' if
+        .with_coda(\\When FILE is '-', read standard input.  With no FILE, read '.' if
                            \\recursive, '-' otherwise.  With fewer than two FILEs, assume -h.
                            \\Exit status is 0 if any line is selected, 1 otherwise;
                            \\if any error occurs and -q is not given, the exit status is 2.
@@ -16,8 +16,8 @@ Grep := {}.{
                            \\GNU grep home page: <https://www.gnu.org/software/grep/>
                            \\General help using GNU software: <https://www.gnu.org/gethelp/>
                            )
-        |> Cli.with_opt_help_section("Pattern selection and interpretation:")
-        |> Cli.with_opt_group(
+        .with_opt_help_section("Pattern selection and interpretation:")
+        .with_opt_group(
             [
                 (Cli.Opt.Spec.flag("extended-regexp")
                     .short("E")
@@ -32,15 +32,15 @@ Grep := {}.{
                     .short("P")
                     .help("PATTERNS are Perl regular expressions"), Perl),
             ], Basic)
-        |> Cli.with_opt(Cli.Opt.Spec.value("regexp")
+        .with_opt(Cli.Opt.Spec.value("regexp")
             .short("e")
             .help("use REGEXP for matching")
             .symbol("REGEXP"))
-        |> Cli.with_opt(Cli.Opt.Spec.value("file")
+        .with_opt(Cli.Opt.Spec.value("file")
             .short("f")
             .help("take PATTERNS from FILE")
             .symbol("FILE"))
-        |> Cli.with_opt_group(
+        .with_opt_group(
             [
                 (Cli.Opt.Spec.flag("ignore-case")
                     .short("i")
@@ -48,19 +48,19 @@ Grep := {}.{
                 (Cli.Opt.Spec.flag("no-ignore-case")
                     .help("do not ignore case distinctions (default)"), Respect),
             ], Respect)
-        |> Cli.with_opt(Cli.Opt.Spec.flag("invert-match")
+        .with_opt(Cli.Opt.Spec.flag("invert-match")
             .short("v")
             .help("select non-matching lines"))
-        |> Cli.with_opt_help_section("Output control:")
-        |> Cli.with_opt(Cli.Opt.Spec.value("max-count")
+        .with_opt_help_section("Output control:")
+        .with_opt(Cli.Opt.Spec.value("max-count")
             .short("m")
             .integer()
             .help("stop after NUM lines selected")
             .symbol("NUM"))
-        |> Cli.with_opt(Cli.Opt.Spec.values("include")
+        .with_opt(Cli.Opt.Spec.values("include")
             .help("search only files that match GLOB (a file pattern)")
             .symbol("GLOB"))
-        |> Cli.with_param(Cli.Param.Spec.values("args").optionals())
+        .with_param(Cli.Param.Spec.values("args").optionals())
 }
 
 base_expected = {
