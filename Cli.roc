@@ -120,7 +120,7 @@ Cli(a) := {
             usage: cli.usage,
             coda: cli.coda,
             opt_infos: cli.opt_infos,
-            param_infos: cli.param_infos.append(Cli.Param.Info.{ kind: Command, name: "" }),
+            param_infos: cli.param_infos.append(Cli.Param.Info.{ kind: Command, name: "", mandatory: False }),
             assemble: |raw| {
                 f = (cli.assemble)(raw)?
                 match raw.params.to_list() {
@@ -165,6 +165,8 @@ Cli(a) := {
         ConflictingOpts(List(Str)),
         UnknownSubcommand(Str),
         MissingSubcommand,
+        SubcommandNotLast,
+        MultipleSubcommandGroups,
     ]
 
     Opt := {}.{
@@ -298,8 +300,20 @@ get_opt_info = |infos, name|
         _ => Err(UnknownOption(name))
     }
 
+validate_subcommands: List(Cli.Param.Info) -> Try({}, _)
+validate_subcommands = |infos| {
+    cmds = infos.keep_if(|i| i.kind == Command)
+    match (cmds, infos.last()) {
+        ([], _) => Ok({})
+        ([_], Ok(i)) if i.kind == Command => Ok({})
+        ([_], Ok(_)) => Err(SubcommandNotLast)
+        _ => Err(MultipleSubcommandGroups)
+    }
+}
+
 tokenise : List(Str), List(Cli.Opt.Info), List(Cli.Param.Info) -> Try(Raw, _)
 tokenise = |argv, opt_infos, param_infos| {
+    _ = validate_subcommands(param_infos)?
     _ = param_infos.fold_try(Bool.False, |seen_optional, p|
         if p.mandatory and seen_optional
             Err(MandatoryParamAfterOptional(p.name))
@@ -939,4 +953,24 @@ expect {
         |> Cli.with_opt(Cli.Opt.Spec.flag("invert").short("v"))
         |> Cli.with_param(Cli.Param.Spec.values("files"))
     { invert: False, files: ["-v", "f.txt"] } == cli.parse(["--", "-v", "f.txt"])?
+}
+
+expect {
+    commit_cli = Cli.succeed(|message| |amend| { message, amend })
+        .with_opt(Cli.Opt.Spec.value("message"))
+        .with_opt(Cli.Opt.Spec.flag("amend"))
+
+    add_cli = Cli.succeed(|name| |url| { name, url })
+        .with_param(Cli.Param.Spec.value("name"))
+        .with_param(Cli.Param.Spec.value("url").optional())
+
+    cli = Cli.succeed(|git_dir| |no_pager| |cmd| |file|{ git_dir, no_pager, cmd, file })
+        .with_opt(Cli.Opt.Spec.value("git-dir"))
+        .with_opt(Cli.Opt.Spec.flag("no-pager"))
+        .with_subcommands([
+            ("commit", commit_cli.map(|c| Commit(c))),
+            ("add", add_cli.map(|c| Add(c))),
+        ])
+        .with_param(Cli.Param.Spec.value("file"))
+    Err(SubcommandNotLast) == cli.parse([])
 }

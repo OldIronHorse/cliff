@@ -29,3 +29,9 @@ expect {
     no_pager: True
     cmd: Commit({ message: Some("Initial check in"), amend: False })
 } == Git.cli.parse(["--no-pager", "commit", "--message", "Initial check in"])?
+
+expect Err(MissingSubcommand) == Git.cli.parse([])
+
+expect Err(UnknownSubcommand("status")) == Git.cli.parse(["status"])
+expect Err(UnknownOption("no-pager")) == Git.cli.parse(["commit", "--no-pager"])
+expect Err(MissingValue("message")) == Git.cli.parse(["commit", "--message"])
