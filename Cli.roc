@@ -1,13 +1,13 @@
-Cli(a) := {
+Cli(a) :: {
     opt_infos: List(Cli.Opt.Info),
     param_infos: List(Cli.Param.Info),
-    assemble: Cli.Raw -> Try(a, CliError),
+    assemble: Raw -> Try(a, CliError),
     usage: Str,
     sections : Dict(U64, Str),
     coda: Str,
     commands: List({ name: Str, help: Str }),
 }.{
-    parse : Cli(a), List(Str) -> Try(a, _)
+    parse : Cli(a), List(Str) -> Try(a, CliError)
     parse = |cli, argv|
         match tokenise(argv, cli.opt_infos, cli.param_infos) {
             Ok(ts) => (cli.assemble)(ts)
@@ -124,7 +124,7 @@ Cli(a) := {
             commands: cli.commands,
         }
 
-    Subcommand(a) := {
+    Subcommand(a) :: {
         name: Str,
         help: Str ?? "",
         cli: Cli(a),
@@ -173,8 +173,6 @@ Cli(a) := {
 
     Optional(a) : [Some(a), None]
 
-    Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
-
     CliError : [
         UnknownOption(Str),
         MissingValue(Str),
@@ -195,9 +193,10 @@ Cli(a) := {
         MultipleSubcommandGroups,
     ]
 
-    Opt := {}.{
+    Opt :: {}.{
         Kind : [Flag, Count, Value, Values]
-        Info := { kind: Kind, long: Str, short: Str ?? "", help: Str ?? "", symbol: Str ?? ""}.{
+        Info :: { kind: Kind, long: Str, short: Str ?? "", help: Str ?? "", symbol: Str ?? ""}.{
+            is_eq : Info, Info -> Bool
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.short == other.short
@@ -205,6 +204,7 @@ Cli(a) := {
                     and self.help == other.help
                     and self.symbol == other.symbol
 
+            to_help_str : Info -> (Str, Str)
             to_help_str = |self| {
                 short = match self.short {
                     "" => "    "
@@ -217,7 +217,7 @@ Cli(a) := {
                 ("${short}${long}", self.help)
             }
         }
-        Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
+        Spec(a) :: { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{
             count : Str -> Spec(U64)
             count = |long| Spec.{ info: Info.{ kind: Count, long }, convert: convert_count }
 
@@ -260,16 +260,16 @@ Cli(a) := {
         }
     }
 
-    Param := {}.{
+    Param :: {}.{
         Kind : [Value, Values, Command]
-        Info := { kind: Kind, name: Str, mandatory: Bool ?? Bool.True }.{
+        Info :: { kind: Kind, name: Str, mandatory: Bool ?? Bool.True }.{
+            is_eq : Info, Info -> Bool
             is_eq = |self, other|
                 self.kind == other.kind
                     and self.name == other.name
                     and self.mandatory == other.mandatory
-                    and self.help == other.help
         }
-        Spec(a) := { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound])}.{
+        Spec(a) :: { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound])}.{
             value : Str -> Spec(Str)
             value = |name| Spec.{ info: Info.{ name, kind: Value }, convert: convert_value }
 
@@ -299,6 +299,8 @@ Cli(a) := {
         }
     }
 }
+
+Raw : { opts: Dict(Str, List(Str)), params: Dict(Str, List(Str)) }
 
 add_opt : Raw, Cli.Opt.Info, Optional(Str) -> Try(Raw, _)
 add_opt = |raw, info, maybe_value|
