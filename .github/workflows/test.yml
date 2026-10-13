@@ -29,8 +29,13 @@ jobs:
         with:
           version: nightly-new-compiler
           #nightly-tag: pin version here:w
-          
       - name: Check the Roc version
         run: roc --version
-      - name: Test Roc code
+      - name: Test library
+        run: roc test Cli.roc
+      - name: Test grep CLI clone
+        run: roc test Grep.roc
+      - name: Test git CLI clone
+        run:  roc test Git.roc
+      - name: Test basic-cli integration
         run: roc test TestLocal.roc
