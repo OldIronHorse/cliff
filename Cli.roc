@@ -5,6 +5,7 @@ Cli(a) := {
     usage: Str,
     sections : Dict(U64, Str),
     coda: Str,
+    commands: List({ name: Str, help: Str }),
 }.{
     parse : Cli(a), List(Str) -> Try(a, _)
     parse = |cli, argv|
@@ -20,24 +21,25 @@ Cli(a) := {
         max_opt_len = opt_descs
             .map(|(opts, _)| opts.count_utf8_bytes())
             .max()
-            .ok_or(0).max(10)
-        opt_descs
-            .map_with_index(|(opts, desc), i|
-                [
-                    match self.sections.get(i) {
-                        Ok(heading) => "\n${heading}\n"
-                        _ => ""
-                    },
-                    opts, " ".repeat(max_opt_len + 2 - opts.count_utf8_bytes()), desc
-                ]
-                |> Str.join_with(""))
-            .prepend(self.usage)
-            .append([
-                "\n${help_option}",
-                " ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2),
-                "display this help text and exit"
-            ] |> Str.join_with(""))
-            .append("\n${self.coda}")
+            .ok_or(0)
+            .max(self.commands.map(|c| c.name.count_utf8_bytes()).max().ok_or(0))
+            .max(10)
+        (if self.usage.is_empty() [] else [self.usage])
+            .concat(if opt_descs.is_empty() [] else [""])
+            .concat(opt_descs
+                .map_with_index(|(opts, desc), i|
+                    [
+                        match self.sections.get(i) {
+                            Ok(heading) => "\n${heading}\n"
+                            _ => ""
+                        },
+                        opts, " ".repeat(max_opt_len + 2 - opts.count_utf8_bytes()), desc
+                    ]
+                    |> Str.join_with("")))
+            .concat(if self.commands.is_empty() [] else [""])
+            .concat(self.commands.map(|c| "  ${c.name}${" ".repeat(max_opt_len - c.name.count_utf8_bytes())}${c.help}"))
+            .append("\n${help_option}${" ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2)}display this help text and exit")
+            .concat(if self.coda.is_empty() [] else ["\n${self.coda}"])
             |> Str.join_with("\n")
     }
 
@@ -49,6 +51,7 @@ Cli(a) := {
         sections: Dict.empty(),
         usage: "",
         coda: "",
+        commands: [],
     }
 
     with_usage : Cli(a), Str -> Cli(a)
@@ -78,6 +81,7 @@ Cli(a) := {
                         vs => Err(ConflictingOpts(vs.map(|(s, _)| s.info.long)))
                 }
             },
+            commands: cli.commands,
         }
 
     with_opt : Cli(a -> b) , Cli.Opt.Spec(a) -> Cli(b)
@@ -97,6 +101,7 @@ Cli(a) := {
                     Err(TypeMismatch) => Err(InvalidOptValue(spec.info.long, vs))
                 }
             },
+            commands: cli.commands,
         }
 
     with_param : Cli(a -> b) , Cli.Param.Spec(a) -> Cli(b)
@@ -116,9 +121,22 @@ Cli(a) := {
                     Err(TypeMismatch) => Err(InvalidParamValue(spec.info.name, vs))
                 }
             },
+            commands: cli.commands,
         }
 
-    with_subcommands : Cli(a -> b), List((Str, Cli(a))) -> Cli(b)
+    Subcommand(a) := {
+        name: Str,
+        help: Str ?? "",
+        cli: Cli(a),
+    }.{
+        command : Str, Cli(a) -> Subcommand(a)
+        command = |name, cli| Subcommand.{ name, cli }
+
+        help : Subcommand(a),  Str -> Subcommand(a)
+        help = |cmd, text| { ..cmd, help: text }
+    }
+
+    with_subcommands : Cli(a -> b), List(Subcommand(a)) -> Cli(b)
     with_subcommands = |cli, sub_cmds|
         Cli.{
             sections: cli.sections,
@@ -130,14 +148,15 @@ Cli(a) := {
                 f = (cli.assemble)(raw)?
                 match raw.params.to_list() {
                     [(name, argv)] =>
-                        match sub_cmds.find_first(|(cmd_name, _)| name == cmd_name) {
-                            Ok((_, sub_cli)) => Ok(f(sub_cli.parse(argv)?))
+                        match sub_cmds.find_first(|cmd| cmd.name == name) {
+                            Ok(sub) => Ok(f(sub.cli.parse(argv)?))
                             Err(NotFound) => Err(UnknownSubcommand(name))
                         }
                     [] => Err(MissingSubcommand)
                     _ => Err(TrailingParameters(raw.params.keys()))
                 }
             },
+            commands: sub_cmds.map(|c| { name: c.name, help: c.help })
         }
 
     map : Cli(a), (a -> b) -> Cli(b)
@@ -149,6 +168,7 @@ Cli(a) := {
             opt_infos: cli.opt_infos,
             param_infos: cli.param_infos,
             assemble: |raw| Ok(fn((cli.assemble)(raw)?)),
+            commands: cli.commands,
             }
 
     Optional(a) : [Some(a), None]
@@ -909,7 +929,7 @@ expect {
     cli = Cli.succeed(|file|
                         { file })
         |> Cli.with_param(Cli.Param.Spec.value("file"))
-    Err(ShowHelp("\n\n    --help  display this help text and exit\n\n")) == cli.parse(["--help"])
+    Err(ShowHelp("\n    --help  display this help text and exit")) == cli.parse(["--help"])
 }
 
 expect {
@@ -937,6 +957,7 @@ expect {
     cli.to_help_str() == \\app [OPTION]... [FILE]...
                          \\description
                          \\example
+                         \\
                          \\
                          \\A logical group of options:
                          \\-E, --extended-regexp  PATTERNS are extended regular expressions
@@ -974,8 +995,8 @@ expect {
         .with_opt(Cli.Opt.Spec.value("git-dir"))
         .with_opt(Cli.Opt.Spec.flag("no-pager"))
         .with_subcommands([
-            ("commit", commit_cli.map(|c| Commit(c))),
-            ("add", add_cli.map(|c| Add(c))),
+            Cli.Subcommand.command("commit", commit_cli.map(|c| Commit(c))),
+            Cli.Subcommand.command("add", add_cli.map(|c| Add(c))),
         ])
         .with_param(Cli.Param.Spec.value("file"))
     Err(SubcommandNotLast) == cli.parse([])
