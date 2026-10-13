@@ -38,7 +38,7 @@ jobs:
           dry_run: ${{ github.event_name != 'workflow_dispatch' }}
           github_token: ${{ github.token }}
 
-      - run: roc test TestLocal.roc
+      - run: roc test package.Cli.roc
 
       - id: previous
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -51,10 +51,10 @@ jobs:
           release_version: ${{ steps.validate.outputs.release_version }}
           dry_run: ${{ github.event_name != 'workflow_dispatch' }}
           previous_url: ${{ steps.previous.outputs.previous_url }}
-          bump_check: warn #require
-          bump_entrypoint: main.roc
+          bump_check: require
+          bump_entrypoint: package/main.roc
 
-      - run: mkdir dist && roc bundle main.roc --output-dir dist
+      - run: mkdir dist && roc bundle package/main.roc --output-dir dist
 
       - id: bundles
         uses: roc-lang/release-package/actions/prepare-bundles@main

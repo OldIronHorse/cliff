@@ -1,4 +1,4 @@
-import Cli
+import cliff.Cli
 
 Git := {}.{
     cli = Cli.succeed(|git_dir| |no_pager| |cmd| { git_dir, no_pager, cmd })

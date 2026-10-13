@@ -1,4 +1,4 @@
-import Cli
+import cliff.Cli
 
 Grep := {}.{
     cli = Cli.succeed(|regexp_type| |pattern_regexp| |pattern_file| |case| |invert_match| |max_count| |include| |pattern_and_files|

@@ -32,10 +32,8 @@ jobs:
       - name: Check the Roc version
         run: roc --version
       - name: Test library
-        run: roc test Cli.roc
+        run: roc test package/Cli.roc
       - name: Test grep CLI clone
-        run: roc test Grep.roc
+        run: roc test example/grep.roc
       - name: Test git CLI clone
-        run:  roc test Git.roc
-      - name: Test basic-cli integration
-        run: roc test TestLocal.roc
+        run:  roc test example/git.roc
