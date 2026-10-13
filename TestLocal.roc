@@ -13,8 +13,8 @@ main! = |argv| {
             match Grep.cli.parse(args) {
                 Ok(cfg) =>
                     Stdout.line!("running... ${Str.inspect(args)} ${Str.inspect(cfg)}")
-                Err(ShowHelp) =>
-                    Stdout.line!(Grep.cli.to_help_str())
+                Err(ShowHelp(text)) =>
+                    Stdout.line!(text)
                 Err(e) =>
                     e |> Str.inspect() |> Stdout.line!()
             }
