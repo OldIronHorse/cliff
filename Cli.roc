@@ -1001,3 +1001,22 @@ expect {
         .with_param(Cli.Param.Spec.value("file"))
     Err(SubcommandNotLast) == cli.parse([])
 }
+
+expect {
+    commit_cli = Cli.succeed(|message| |amend| { message, amend })
+        .with_opt(Cli.Opt.Spec.value("message"))
+        .with_opt(Cli.Opt.Spec.flag("amend"))
+
+    add_cli = Cli.succeed(|name| |url| { name, url })
+        .with_param(Cli.Param.Spec.value("name"))
+        .with_param(Cli.Param.Spec.value("url").optional())
+
+    cli = Cli.succeed(|git_dir| |no_pager| |cmd| { git_dir, no_pager, cmd })
+        .with_opt(Cli.Opt.Spec.value("git-dir"))
+        .with_opt(Cli.Opt.Spec.flag("no-pager"))
+        .with_subcommands([
+            Cli.Subcommand.command("commit", commit_cli.map(|c| Commit(c))),
+            Cli.Subcommand.command("add", add_cli.map(|c| Add(c))),
+        ])
+    Err(UnknownOption("bogus")) == cli.parse(["commit", "--bogus", "--help"])
+}
