@@ -38,7 +38,7 @@ jobs:
           dry_run: ${{ github.event_name != 'workflow_dispatch' }}
           github_token: ${{ github.token }}
 
-      - run: roc test package.Cli.roc
+      - run: roc test package/Cli.roc
 
       - id: previous
         if: ${{ github.event_name == 'workflow_dispatch' }}
