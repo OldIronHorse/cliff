@@ -10,8 +10,19 @@ Git := {}.{
         .with_subcommands([
             Cli.Subcommand.command("commit", commit_cli.map(|c| Commit(c))).help("Record changes to the repository"),
             Cli.Subcommand.command("add", add_cli.map(|c| Add(c))),
+            Cli.Subcommand.command("remote", remote_cli.map(|c| Remote(c))),
         ])
 }
+
+remote_cli = Cli.succeed(|cmd| { cmd })
+        .with_usage(\\git remote COMMAND
+                    \\Act on a remote repository
+                    \\
+                    )
+        .with_subcommands([
+            Cli.Subcommand.command("commit", commit_cli.map(|c| Commit(c))).help("Record changes to the repository"),
+            Cli.Subcommand.command("add", add_cli.map(|c| Add(c))),
+        ])
 
 commit_cli = Cli.succeed(|message| |amend| { message, amend })
     .with_usage(\\git commit [OPTION]...
@@ -50,6 +61,7 @@ expect {
                \\
                \\  commit            Record changes to the repository
                \\  add               
+               \\  remote            
                \\
                \\    --help          display this help text and exit
                \\
@@ -67,4 +79,16 @@ expect {
                \\    --help     display this help text and exit
                \\
     Err(ShowHelp(expected)) == Git.cli.parse(["commit", "--help"])
+}
+
+expect {
+    expected = \\git remote COMMAND
+               \\Act on a remote repository
+               \\
+               \\  commit    Record changes to the repository
+               \\  add       
+               \\
+               \\    --help  display this help text and exit
+               \\
+    Err(ShowHelp(expected)) == Git.cli.parse(["remote", "--help"])
 }
