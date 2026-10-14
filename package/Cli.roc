@@ -1,6 +1,8 @@
 ## Build your Command Line Interface For Fun
 ##
 ## This module is the entrypoint for building CLIs using CliFF.
+import Grid
+
 Cli(a) :: {
     opt_infos: List(Cli.Opt.Info),
     param_infos: List(Cli.Param.Info),
@@ -20,30 +22,24 @@ Cli(a) :: {
 
     to_help_str : Cli(a) -> Str
     to_help_str = |self| {
-        opt_descs = self.opt_infos.map(|i| i.to_help_str())
-        max_opt_len = opt_descs
-            .map(|(opts, _)| opts.count_utf8_bytes())
-            .max()
-            .ok_or(0)
-            .max(self.commands.map(|c| c.name.count_utf8_bytes()).max().ok_or(0))
-            .max(10)
+        options_commands_help = Grid.{}.format(
+            self.opt_infos.map(|i| i.to_help_str())
+                .concat(self.commands.map(|c| ["  ${c.name}", " ${c.help}"]))
+                .append(["${help_option}", " display this help text and exit"]))
+            .fold_with_index("", |s, row, i|
+                s.concat([
+                        match self.sections.get(i) {
+                            Ok(heading) => "\n${heading}\n"
+                            _  if i > 0
+                                and (i == self.opt_infos.len()
+                                    or i == self.opt_infos.len() + self.commands.len()) => "\n"
+                            _ => ""
+                        },
+                        "${row}\n"
+                    ]
+                    |> Str.join_with("")))
 
-        options = opt_descs
-            .map_with_index(|(opts, desc), i|
-                [
-                    match self.sections.get(i) {
-                        Ok(heading) => "\n${heading}\n"
-                        _ => ""
-                    },
-                    opts, " ".repeat(max_opt_len + 2 - opts.count_utf8_bytes()), desc, "\n"
-                ]
-                |> Str.join_with(""))
-            |> Str.join_with("")
-        commands = self.commands
-            .map(|c| "  ${c.name}${" ".repeat(max_opt_len - c.name.count_utf8_bytes())}${c.help}\n")
-            |> Str.join_with("")
-        help = "${help_option}${" ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2)}display this help text and exit\n"
-        [self.usage, options, commands, help, self.coda]
+        [self.usage, options_commands_help, self.coda]
             .drop_if(|s| s.is_empty())
             |> Str.join_with("\n")
     }
@@ -208,7 +204,7 @@ Cli(a) :: {
                     and self.help == other.help
                     and self.symbol == other.symbol
 
-            to_help_str : Info -> (Str, Str)
+            to_help_str : Info -> List(Str)
             to_help_str = |self| {
                 short = match self.short {
                     "" => "    "
@@ -218,7 +214,7 @@ Cli(a) :: {
                     Value | Values if self.symbol.is_empty().not() => "--${self.long}=${self.symbol}"
                     _ => "--${self.long}"
                 }
-                ("${short}${long}", self.help)
+                ["${short}${long}", " ${self.help}"]
             }
         }
         Spec(a) :: { info: Info, convert: List(Str) -> Try(a, [TypeMismatch, NotFound]) }.{

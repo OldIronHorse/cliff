@@ -6,7 +6,6 @@ app [main!] {
 import pf.OsStr
 import pf.Stdout
 import Grep
-import Git
 
 main! : List(OsStr) => Try({}, _)
 main! = |argv| {

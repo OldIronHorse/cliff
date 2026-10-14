@@ -57,11 +57,11 @@ expect Err(MissingValue("message")) == Git.cli.parse(["commit", "--message"])
 
 expect {
     expected = \\    --git-dir=PATH  storage directory (default: .git)
-               \\    --no-pager      
+               \\    --no-pager
                \\
                \\  commit            Record changes to the repository
-               \\  add               
-               \\  remote            
+               \\  add
+               \\  remote
                \\
                \\    --help          display this help text and exit
                \\
@@ -73,8 +73,8 @@ expect {
                \\Record changes to the repository
                \\example: git commit --message "Fix for important bug"
                \\
-               \\    --message  
-               \\    --amend    
+               \\    --message
+               \\    --amend
                \\
                \\    --help     display this help text and exit
                \\
@@ -86,7 +86,7 @@ expect {
                \\Act on a remote repository
                \\
                \\  commit    Record changes to the repository
-               \\  add       
+               \\  add
                \\
                \\    --help  display this help text and exit
                \\
