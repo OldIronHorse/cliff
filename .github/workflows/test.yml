@@ -34,6 +34,6 @@ jobs:
       - name: Test library
         run: roc test package/Cli.roc
       - name: Test grep CLI clone
-        run: roc test example/grep.roc
+        run: roc test examples/grep.roc
       - name: Test git CLI clone
-        run:  roc test example/git.roc
+        run: roc test examples/git.roc
