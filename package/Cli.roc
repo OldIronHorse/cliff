@@ -1,3 +1,6 @@
+## Build your Command Line Interface For Fun
+##
+## This module is the entrypoint for building CLIs using CliFF.
 Cli(a) :: {
     opt_infos: List(Cli.Opt.Info),
     param_infos: List(Cli.Param.Info),
@@ -24,22 +27,24 @@ Cli(a) :: {
             .ok_or(0)
             .max(self.commands.map(|c| c.name.count_utf8_bytes()).max().ok_or(0))
             .max(10)
-        (if self.usage.is_empty() [] else [self.usage])
-            .concat(if opt_descs.is_empty() [] else [""])
-            .concat(opt_descs
-                .map_with_index(|(opts, desc), i|
-                    [
-                        match self.sections.get(i) {
-                            Ok(heading) => "\n${heading}\n"
-                            _ => ""
-                        },
-                        opts, " ".repeat(max_opt_len + 2 - opts.count_utf8_bytes()), desc
-                    ]
-                    |> Str.join_with("")))
-            .concat(if self.commands.is_empty() [] else [""])
-            .concat(self.commands.map(|c| "  ${c.name}${" ".repeat(max_opt_len - c.name.count_utf8_bytes())}${c.help}"))
-            .append("\n${help_option}${" ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2)}display this help text and exit")
-            .concat(if self.coda.is_empty() [] else ["\n${self.coda}"])
+
+        options = opt_descs
+            .map_with_index(|(opts, desc), i|
+                [
+                    match self.sections.get(i) {
+                        Ok(heading) => "\n${heading}\n"
+                        _ => ""
+                    },
+                    opts, " ".repeat(max_opt_len + 2 - opts.count_utf8_bytes()), desc, "\n"
+                ]
+                |> Str.join_with(""))
+            |> Str.join_with("")
+        commands = self.commands
+            .map(|c| "  ${c.name}${" ".repeat(max_opt_len - c.name.count_utf8_bytes())}${c.help}\n")
+            |> Str.join_with("")
+        help = "${help_option}${" ".repeat(max_opt_len - help_option.count_utf8_bytes() + 2)}display this help text and exit\n"
+        [self.usage, options, commands, help, self.coda]
+            .drop_if(|s| s.is_empty())
             |> Str.join_with("\n")
     }
 
@@ -931,7 +936,7 @@ expect {
     cli = Cli.succeed(|file|
                         { file })
         |> Cli.with_param(Cli.Param.Spec.value("file"))
-    Err(ShowHelp("\n    --help  display this help text and exit")) == cli.parse(["--help"])
+    Err(ShowHelp("    --help  display this help text and exit\n")) == cli.parse(["--help"])
 }
 
 expect {
@@ -959,7 +964,6 @@ expect {
     cli.to_help_str() == \\app [OPTION]... [FILE]...
                          \\description
                          \\example
-                         \\
                          \\
                          \\A logical group of options:
                          \\-E, --extended-regexp  PATTERNS are extended regular expressions

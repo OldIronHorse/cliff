@@ -17,6 +17,7 @@ commit_cli = Cli.succeed(|message| |amend| { message, amend })
     .with_usage(\\git commit [OPTION]...
                 \\Record changes to the repository
                 \\example: git commit --message "Fix for important bug"
+                \\
                 )
     .with_opt(Cli.Opt.Spec.value("message"))
     .with_opt(Cli.Opt.Spec.flag("amend"))
@@ -44,14 +45,14 @@ expect Err(UnknownOption("no-pager")) == Git.cli.parse(["commit", "--no-pager"])
 expect Err(MissingValue("message")) == Git.cli.parse(["commit", "--message"])
 
 expect {
-    expected = \\
-               \\    --git-dir=PATH  storage directory (default: .git)
+    expected = \\    --git-dir=PATH  storage directory (default: .git)
                \\    --no-pager      
                \\
                \\  commit            Record changes to the repository
                \\  add               
                \\
                \\    --help          display this help text and exit
+               \\
     Err(ShowHelp(expected)) == Git.cli.parse(["--help"])
 }
 
@@ -64,5 +65,6 @@ expect {
                \\    --amend    
                \\
                \\    --help     display this help text and exit
+               \\
     Err(ShowHelp(expected)) == Git.cli.parse(["commit", "--help"])
 }
