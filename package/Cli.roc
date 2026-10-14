@@ -194,8 +194,7 @@ Cli(a) :: {
         ConflictingOpts(List(Str)),
         UnknownSubcommand(Str),
         MissingSubcommand,
-        SubcommandNotLast,
-        MultipleSubcommandGroups,
+        ParamSubcommandConflict,
     ]
 
     Opt :: {}.{
@@ -335,12 +334,10 @@ get_opt_info = |infos, name|
 
 validate_subcommands: List(Cli.Param.Info) -> Try({}, _)
 validate_subcommands = |infos| {
-    cmds = infos.keep_if(|i| i.kind == Command)
-    match (cmds, infos.last()) {
-        ([], _) => Ok({})
-        ([_], Ok(i)) if i.kind == Command => Ok({})
-        ([_], Ok(_)) => Err(SubcommandNotLast)
-        _ => Err(MultipleSubcommandGroups)
+    match infos.map(|i| i.kind) {
+        [Command]=> Ok({})
+        ks if ks.contains(Command).not() => Ok({})
+        _ => Err(ParamSubcommandConflict)
     }
 }
 
@@ -1005,7 +1002,7 @@ expect {
             Cli.Subcommand.command("add", add_cli.map(|c| Add(c))),
         ])
         .with_param(Cli.Param.Spec.value("file"))
-    Err(SubcommandNotLast) == cli.parse([])
+    Err(ParamSubcommandConflict) == cli.parse([])
 }
 
 expect {
