@@ -17,7 +17,6 @@ Git := {}.{
 remote_cli = Cli.succeed(|cmd| { cmd })
         .with_usage(\\git remote COMMAND
                     \\Act on a remote repository
-                    \\
                     )
         .with_subcommands([
             Cli.Subcommand.command("commit", commit_cli.map(|c| Commit(c))).help("Record changes to the repository"),
@@ -28,7 +27,6 @@ commit_cli = Cli.succeed(|message| |amend| { message, amend })
     .with_usage(\\git commit [OPTION]...
                 \\Record changes to the repository
                 \\example: git commit --message "Fix for important bug"
-                \\
                 )
     .with_opt(Cli.Opt.Spec.value("message"))
     .with_opt(Cli.Opt.Spec.flag("amend"))
@@ -64,7 +62,6 @@ expect {
                \\  remote
                \\
                \\    --help          display this help text and exit
-               \\
     Err(ShowHelp(expected)) == Git.cli.parse(["--help"])
 }
 
@@ -77,7 +74,6 @@ expect {
                \\    --amend
                \\
                \\    --help     display this help text and exit
-               \\
     Err(ShowHelp(expected)) == Git.cli.parse(["commit", "--help"])
 }
 
@@ -89,6 +85,5 @@ expect {
                \\  add
                \\
                \\    --help  display this help text and exit
-               \\
     Err(ShowHelp(expected)) == Git.cli.parse(["remote", "--help"])
 }

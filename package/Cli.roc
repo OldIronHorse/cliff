@@ -26,22 +26,22 @@ Cli(a) :: {
             self.opt_infos.map(|i| i.to_help_str())
                 .concat(self.commands.map(|c| ["  ${c.name}", " ${c.help}"]))
                 .append(["${help_option}", " display this help text and exit"]))
-            .fold_with_index("", |s, row, i|
-                s.concat([
+            .fold_with_index([], |lines, row, i|
+                lines.append([
                         match self.sections.get(i) {
-                            Ok(heading) => "\n${heading}\n"
+                            Ok(heading) => "${if i > 0 "\n" else ""}${heading}\n"
                             _  if i > 0
                                 and (i == self.opt_infos.len()
                                     or i == self.opt_infos.len() + self.commands.len()) => "\n"
                             _ => ""
                         },
-                        "${row}\n"
-                    ]
-                    |> Str.join_with("")))
+                        "${row}"
+                    ] |> Str.join_with("")))
+            |> Str.join_with("\n")
 
         [self.usage, options_commands_help, self.coda]
             .drop_if(|s| s.is_empty())
-            |> Str.join_with("\n")
+            |> Str.join_with("\n\n")
     }
 
     succeed : a -> Cli(a)
@@ -929,7 +929,7 @@ expect {
     cli = Cli.succeed(|file|
                         { file })
         |> Cli.with_param(Cli.Param.Spec.value("file"))
-    Err(ShowHelp("    --help  display this help text and exit\n")) == cli.parse(["--help"])
+    Err(ShowHelp("    --help  display this help text and exit")) == cli.parse(["--help"])
 }
 
 expect {
