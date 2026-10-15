@@ -1,7 +1,7 @@
 ## Build your Command Line Interface For Fun
 ##
 ## This module is the entrypoint for building CLIs using CliFF.
-import Grid
+import Table
 
 Cli(a) :: {
     opt_infos: List(Cli.Opt.Info),
@@ -22,7 +22,7 @@ Cli(a) :: {
 
     to_help_str : Cli(a) -> Str
     to_help_str = |self| {
-        options_commands_help = Grid.{}.format(
+        options_commands_help = Table.plain.format(
             self.opt_infos.map(|i| i.to_help_str())
                 .concat(self.commands.map(|c| ["  ${c.name}", " ${c.help}"]))
                 .append(["${help_option}", " display this help text and exit"]))
@@ -191,6 +191,7 @@ Cli(a) :: {
         UnknownSubcommand(Str),
         MissingSubcommand,
         ParamSubcommandConflict,
+        DuplicateSubcommand(Str),
     ]
 
     Opt :: {}.{

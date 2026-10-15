@@ -19,7 +19,14 @@ remote_cli = Cli.succeed(|cmd| { cmd })
                     \\Act on a remote repository
                     )
         .with_subcommands([
-            Cli.Subcommand.command("commit", commit_cli.map(|c| Commit(c))).help("Record changes to the repository"),
+            Cli.Subcommand.command(
+                    "commit",
+                    commit_cli.with_usage(\\git remote commit [OPTION]...
+                                          \\Record changes to the remote repository
+                                          \\example: git remote commit --message "Fix for important bug"
+                                          )
+                        .map(|c| Commit(c)))
+                .help("Record changes to the repository"),
             Cli.Subcommand.command("add", add_cli.map(|c| Add(c))),
         ])
 
@@ -87,3 +94,18 @@ expect {
                \\    --help  display this help text and exit
     Err(ShowHelp(expected)) == Git.cli.parse(["remote", "--help"])
 }
+
+expect Err(MissingSubcommand) == Git.cli.parse(["remote"])
+expect {
+    expected = \\git remote commit [OPTION]...
+               \\Record changes to the remote repository
+               \\example: git remote commit --message "Fix for important bug"
+               \\
+               \\    --message
+               \\    --amend
+               \\
+               \\    --help     display this help text and exit
+    Err(ShowHelp(expected)) == Git.cli.parse(["remote", "commit", "--help"])
+}
+
+expect { git_dir: ".git", no_pager: False, cmd: Remote(Add({ name: "f.txt", url: None })) } == Git.cli.parse(["remote", "add", "f.txt"])?
