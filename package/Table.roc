@@ -10,18 +10,21 @@ Table :: {
     pipe : Table
     pipe = Table.{ style: Pipe }
 
+    grid : Table
+    grid = Table.{ style: Grid }
+
     format : Table, List(List(Str)) -> List(Str)
-    format = |grid, rows| {
+    format = |table, rows| {
         max_widths = rows
-            .prepend(grid.headers)
+            .prepend(table.headers)
             .map(|row| row.map(Str.count_utf8_bytes))
             .fold([], |mws, row|
                     mws.map2(row, U64.max)
                         .concat(mws.drop_first(row.len()))
                         .concat(row.drop_first(mws.len())))
-        match grid.style {
+        match table.style {
             Plain =>
-                (if grid.headers.is_empty() [] else [grid.headers, max_widths.map(|w| "-".repeat(w))])
+                (if table.headers.is_empty() [] else [table.headers, max_widths.map(|w| "-".repeat(w))])
                     .concat(rows)
                     .map(|row| row.map2(max_widths, |field, max_width| field |> pad_right(max_width)))
                     .map(|row|
@@ -29,11 +32,11 @@ Table :: {
                             .trim_end())
             Pipe => {
                 {
-                    if grid.headers.is_empty()
+                    if table.headers.is_empty()
                         []
                     else
                         [
-                            grid.headers
+                            table.headers
                                 .map2(max_widths, |field, max_width| field |> pad_right(max_width))
                                 |> Str.join_with(" | ")
                                 .with_prefix("| ")
@@ -46,12 +49,27 @@ Table :: {
                             |> pad_right(max_width)))
                             .map(|row| "| ${row |> Str.join_with(" | ")} |"))
             }
-            _ => { crash "not implemented" }
+            Grid => {
+                bar = "+-${max_widths.map(|w| "-".repeat(w)) |> Str.join_with("-+-")}-+"
+                {
+                    if table.headers.is_empty()
+                        []
+                    else
+                        [
+                            "| ${table.headers.map2(max_widths, |field, max_width| field |> pad_right(max_width)) |> Str.join_with(" | ")} |",
+                            "+=${max_widths.map(|w| "=".repeat(w)) |> Str.join_with("=+=")}=+"
+                        ]
+                }.concat(rows
+                    .map(|row| "| ${row.map2(max_widths, |field, max_width| field |> pad_right(max_width)) |> Str.join_with(" | ")} |")
+                    .intersperse(bar))
+                .prepend(bar)
+                .append(bar)
+            }
         }
     }
 
     with_headers : Table, List(Str) -> Table
-    with_headers = |grid, headers| { ..grid, headers }
+    with_headers = |table, headers| { ..table, headers }
 }
 
 pad_right = |s, w| "${s}${" ".repeat(w - s.count_utf8_bytes())}"
@@ -115,5 +133,22 @@ expect {
     actual = Table.pipe
         .with_headers(["Dog", "Cat", "Antelope", "Sheep"])
         .format([["one", "two", "three", "four"], ["five", "six", "seven", "eight"]])
+    actual == expected
+}
+
+expect {
+    expected = [
+        "+------+-----+----------+-------+",
+        "| Dog  | Cat | Antelope | Sheep |",
+        "+======+=====+==========+=======+",
+        "| one  | two | three    | four  |",
+        "+------+-----+----------+-------+",
+        "| five | six | seven    | eight |",
+        "+------+-----+----------+-------+",
+    ]
+    actual = Table.grid
+        .with_headers(["Dog", "Cat", "Antelope", "Sheep"])
+        .format([["one", "two", "three", "four"], ["five", "six", "seven", "eight"]])
+    dbg actual
     actual == expected
 }
