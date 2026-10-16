@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
 
 # Serialize release runs in one group; PR validation runs get per-ref groups
 # so they never cancel a queued release run.
