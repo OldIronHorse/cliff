@@ -149,4 +149,4 @@ $
 
 ## License
 
-Licensed under UPL-1.0
+Licensed under UPL-1.0, see [LICENSE](https://github.com/OldIronHorse/cliff/blob/trunk/LICENSE)
