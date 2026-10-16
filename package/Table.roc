@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: UPL-1.0
+# Copyright (c) 2026 Simon Redding
 Table :: {
     style: Style,
     columns: List(Column) ?? [],
