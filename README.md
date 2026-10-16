@@ -104,7 +104,7 @@ Grep := {}.{
 
 Here's what running that look like:
 
-```
+```console
 $ roc run examples/grep.roc
 running... [] { case: Respect, include: [], invert_match: False, max_count: None, pattern_and_files: [], pattern_file: None, pattern_regexp: None, regexp_type: Basic }
 
