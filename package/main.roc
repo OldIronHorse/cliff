@@ -1,4 +1,4 @@
 package [
     Cli,
-    Grid,
+    Table,
 ]
