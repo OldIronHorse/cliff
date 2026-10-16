@@ -78,6 +78,13 @@ jobs:
             .release/test-matrix.json
           if-no-files-found: error
 
+        - id: docs
+        - run: roc docs package/main.roc
+        - uses: actions/upload-pages-artifact@v5
+          with:
+            path: generated-docs
+        - uses: actions/deploy-pages@v5
+
   publish:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     needs:
