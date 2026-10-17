@@ -1,36 +1,142 @@
 # SPDX-License-Identifier: UPL-1.0
 # Copyright (c) 2026 Simon Redding
+
+## A text table formatter.
+##
+## Build a `Table` from one of the style constructors ([Table.plain],
+## [Table.pipe] or [Table.grid]), optionally describe its columns with
+## [Table.with_columns], then call [Table.format] with the rows to get back
+## one string per output line.
+##
+## Columns are sized to fit their widest cell. Rows shorter than the table are
+## padded using each column's default value, and the table grows extra unnamed
+## columns if a row is wider than the columns you declared.
+##
+## ```roc
+## expect {
+##     Table.pipe
+##         .with_columns([Table.column("Dog"), Table.column("Cat")])
+##         .format([["one", "two"], ["five", "six"]])
+##         == [
+##             "| Dog  | Cat |",
+##             "|:-----|:----|",
+##             "| one  | two |",
+##             "| five | six |",
+##         ]
+## }
+## ```
 Table :: {
     style: Style,
     columns: List(Column) ?? [],
 }.{
+    ## How a table is drawn.
+    ##
+    ## - `Plain`: columns separated by spaces, with a dashed rule under the header.
+    ## - `Pipe`: Markdown-style pipe table, including alignment markers.
+    ## - `Grid`: reStructuredText-style grid with a rule between every row.
     Style : [Plain, Pipe, Grid]
 
+    ## A table drawn in the `Plain` style, with no columns declared.
+    ##
+    ## Without columns there is no header row, so the output is just the aligned
+    ## rows.
+    ##
+    ## ```roc
+    ## expect Table.plain.format([["one", "two"], ["five", "six"]]) == [
+    ##     "one  two",
+    ##     "five six",
+    ## ]
+    ## ```
     plain : Table
     plain = Table.{ style: Plain }
 
+    ## A table drawn in the `Pipe` style (Markdown pipe tables), with no columns
+    ## declared.
+    ##
+    ## ```roc
+    ## expect Table.pipe.format([["one", "two"], ["five", "six"]]) == [
+    ##     "| one  | two |",
+    ##     "| five | six |",
+    ## ]
+    ## ```
     pipe : Table
     pipe = Table.{ style: Pipe }
 
+    ## A table drawn in the `Grid` style, with a rule above, below and between
+    ## every row, with no columns declared.
+    ##
+    ## When columns are declared, the header is separated from the body by a
+    ## double (`=`) rule.
     grid : Table
     grid = Table.{ style: Grid }
 
+    ## How the text in a column is aligned within its width.
+    ##
+    ## `Centre` is not yet implemented for the `Plain` style (formatting will
+    ## crash), and the `Pipe` style does not yet emit the `:---:` marker for it.
     Alignment : [Right, Left, Centre]
+
+    ## Describes a single column of a [Table]: its header name, its alignment and
+    ## the value used to fill cells that a row leaves out.
+    ##
+    ## Create one with [Table.column] and refine it with [Column.align] and
+    ## [Column.default].
     Column := { # TODO: type, formatting, Width : [Auto, Max(U64), Min(U64)]
         name: Str ?? "",
         align: Alignment ?? Left,
         default_value: Str ?? "",
     }.{
+        ## Sets how the column's cells are aligned. Columns are `Left` aligned
+        ## unless you say otherwise.
+        ##
+        ## ```roc
+        ## Table.column("Antelope").align(Right)
+        ## ```
         align : Column, Alignment -> Column
         align = |column, align| { ..column, align }
 
+        ## Sets the value used for this column when a row has no cell for it.
+        ## The default is the empty string.
+        ##
+        ## ```roc
+        ## Table.column("Sheep").default("N/A")
+        ## ```
         default : Column, Str -> Column
         default = |column, v| { ..column, default_value: v }
     }
 
+    ## Creates a [Column] with the given header name, `Left` aligned and with an
+    ## empty default value.
+    ##
+    ## ```roc
+    ## Table.column("Dog")
+    ## ```
     column : Str -> Column
     column = |name| Column.{ name }
 
+    ## Formats `rows` as a table, returning one string per output line.
+    ##
+    ## Each inner list is a row of cells. Column widths are measured in UTF-8
+    ## bytes, so text containing multi-byte characters may not line up.
+    ##
+    ## - If the table has columns, a header (and its separator) is included.
+    ## - Rows shorter than the table are padded with each column's default value.
+    ## - Rows wider than the declared columns get extra unnamed columns.
+    ## - `Plain` output has trailing whitespace trimmed from each line.
+    ##
+    ## ```roc
+    ## expect {
+    ##     Table.plain
+    ##         .with_columns([Table.column("Dog"), Table.column("Cat")])
+    ##         .format([["one", "two"], ["five", "six"]])
+    ##         == [
+    ##             "Dog  Cat",
+    ##             "---- ---",
+    ##             "one  two",
+    ##             "five six",
+    ##         ]
+    ## }
+    ## ```
     format : Table, List(List(Str)) -> List(Str)
     format = |table, rows| {
         max_widths = rows
@@ -96,10 +202,19 @@ Table :: {
         }
     }
 
+    ## Returns a copy of the table with its columns replaced by `columns`.
+    ##
+    ## The columns give the header names, alignment and default values, in
+    ## left-to-right order.
+    ##
+    ## ```roc
+    ## Table.grid.with_columns([Table.column("Dog"), Table.column("Cat")])
+    ## ```
     with_columns : Table, List(Column) -> Table
     with_columns = |table, columns| { ..table, columns }
 }
 
+# Internal helper: pads or aligns one cell according to its column's alignment.
 format_field : Str, U64, Table.Column -> Str
 format_field = |field, width, col|
     match col.align {
@@ -108,6 +223,7 @@ format_field = |field, width, col|
         Centre => { crash "not implemented" }
     }
 
+# Internal helpers: pad a string with spaces to a width (in UTF-8 bytes).
 pad_right = |s, w| "${s}${" ".repeat(w - s.count_utf8_bytes())}"
 pad_left = |s, w| "${" ".repeat(w - s.count_utf8_bytes())}${s}"
 
