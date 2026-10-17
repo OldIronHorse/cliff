@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Simon Redding
 
 import tabulate.Table
+import unicode.Grapheme
 
 ## A declarative command-line interface that parses a list of arguments into a
 ## value of type `a`.
@@ -708,14 +709,14 @@ tokenise = |argv, opt_infos, param_infos| {
                         }
                     }
                 }
-            [opt, .. as rest] if consider_opts and opt.starts_with("-") and opt.count_utf8_bytes() > 1 =>
+            [opt, .. as rest] if consider_opts and opt.starts_with("-") and opt.drop_prefix("-").is_empty().not() =>
                 match opt.drop_prefix("-") {
-                    #tags if tags.count_utf8_bytes() == 1 and [Value, Values].contains(get_opt_info(opt_infos_by_name, tags)?.kind) =>
-                    #match (rest, get_opt_info(opt_infos_by_name, tags)?) {
-                    #([value, .. as rest1], i) =>
-                    #do(rest1, p_infos, add_opt(raw, i, Some(value))?)
-                    #([], i) => Err(MissingValue(i.long))
-                    #}
+                    #tags if Grapheme.slices(tags).len() == 1 and [Value, Values].contains(get_opt_info(opt_infos_by_name, tags)?.kind) =>
+                    #    match (rest, get_opt_info(opt_infos_by_name, tags)?) {
+                    #       ([value, .. as rest1], i) =>
+                    #           do(rest1, p_infos, add_opt(raw, i, Some(value))?, consider_opts)
+                    #       ([], i) => Err(MissingValue(i.long))
+                    #   }
                     tags =>
                         do(rest, p_infos, tags.to_utf8()
                             .fold_try(raw, |r, c|
