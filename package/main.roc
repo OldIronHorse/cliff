@@ -8,5 +8,6 @@
 ## It allows automated generation of --help output.
 package [
     Cli,
-    Table,
-]
+] {
+    tabulate: "https://github.com/OldIronHorse/tabulate/releases/download/0.0.1/GrMUHhHzrxSXy2rVCnbRMAnWKgePcEPoVU12UJYU8j2q.tar.zst",
+}

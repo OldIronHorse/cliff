@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: UPL-1.0
 # Copyright (c) 2026 Simon Redding
 
-import Table
+import tabulate.Table
 
 ## A declarative command-line interface that parses a list of arguments into a
 ## value of type `a`.
