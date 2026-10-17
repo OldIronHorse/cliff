@@ -72,8 +72,6 @@ Table :: {
 
     ## How the text in a column is aligned within its width.
     ##
-    ## `Centre` is not yet implemented for the `Plain` style (formatting will
-    ## crash), and the `Pipe` style does not yet emit the `:---:` marker for it.
     Alignment : [Right, Left, Centre]
 
     ## Describes a single column of a [Table]: its header name, its alignment and
@@ -150,8 +148,12 @@ Table :: {
         rs = rows.map(|row| row.concat(columns.drop_first(row.len()).map(|c| c.default_value)))
         match table.style {
             Plain =>
-                (if table.columns.is_empty() [] else [columns.map(|c| c.name), max_widths.map(|w| "-".repeat(w))])
-                    .concat(rs)
+                {
+                    if table.columns.is_empty()
+                        []
+                    else
+                        [columns.map(|c| c.name), max_widths.map(|w| "-".repeat(w))]
+                }.concat(rs)
                     .map(|row|
                         row.map3(max_widths, columns, format_field))
                     .map(|row|
@@ -173,7 +175,7 @@ Table :: {
                                     match col.align {
                                         Left => ":${"-".repeat(width + 1)}"
                                         Right => "${"-".repeat(width + 1)}:"
-                                        Centre => "${"-".repeat(width + 2)}"
+                                        Centre => ":${"-".repeat(width)}:"
                                     })
                                 |> Str.join_with("|")
                                 .with_prefix("|")
@@ -220,7 +222,11 @@ format_field = |field, width, col|
     match col.align {
         Left => pad_right(field, width)
         Right => pad_left(field, width)
-        Centre => { crash "not implemented" }
+        Centre => {
+            len = field.count_utf8_bytes()
+            pad = (width - len) / 2
+            "${" ".repeat(pad)}${field}${" ".repeat(width - len - pad)}"
+        }
     }
 
 # Internal helpers: pad a string with spaces to a width (in UTF-8 bytes).
@@ -353,6 +359,18 @@ expect {
     ]
     actual = Table.pipe
         .with_columns([Table.column("Dog"), Table.column("Cat"), Table.column("Antelope").align(Right), Table.column("Sheep")])
+        .format([["one", "two", "three", "four"], ["five", "six", "seven", "eight"]])
+    actual == expected
+}
+expect {
+    expected = [
+        "| Dog  | Cat | Antelope | Sheep |",
+        "|:-----|:----|:--------:|:------|",
+        "| one  | two |  three   | four  |",
+        "| five | six |  seven   | eight |",
+    ]
+    actual = Table.pipe
+        .with_columns([Table.column("Dog"), Table.column("Cat"), Table.column("Antelope").align(Centre), Table.column("Sheep")])
         .format([["one", "two", "three", "four"], ["five", "six", "seven", "eight"]])
     actual == expected
 }
